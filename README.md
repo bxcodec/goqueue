@@ -7,7 +7,6 @@ GoQueue - one library to rule them all. A golang wrapper that handles all the co
 - [Support](#support)
 - [Getting Started](#getting-started)
 - [Example](#example)
-- [Limitation](#limitation)
 - [Contribution](#contribution)
 
 ## Support

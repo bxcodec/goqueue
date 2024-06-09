@@ -1,6 +1,6 @@
 package consumer
 
-import "github.com/bxcodec/goqu"
+import "github.com/bxcodec/goqueue"
 
 // Option represents the configuration options for the consumer.
 type Option struct {
@@ -9,7 +9,7 @@ type Option struct {
 	// QueueName specifies the name of the queue to consume messages from.
 	QueueName string
 	// Middlewares is a list of middleware functions to be applied to the inbound message handler.
-	Middlewares []goqu.InboundMessageHandlerMiddlewareFunc
+	Middlewares []goqueue.InboundMessageHandlerMiddlewareFunc
 }
 
 // OptionFunc is a function type that takes an `opt` parameter of type `*Option`.
@@ -35,7 +35,7 @@ func WithQueueName(name string) OptionFunc {
 // WithMiddlewares is an OptionFunc that sets the provided middlewares for the consumer.
 // Middlewares are used to process inbound messages before they are handled by the consumer.
 // The middlewares are applied in the order they are provided.
-func WithMiddlewares(middlewares ...goqu.InboundMessageHandlerMiddlewareFunc) OptionFunc {
+func WithMiddlewares(middlewares ...goqueue.InboundMessageHandlerMiddlewareFunc) OptionFunc {
 	return func(opt *Option) {
 		opt.Middlewares = middlewares
 	}

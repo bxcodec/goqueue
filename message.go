@@ -1,9 +1,9 @@
-package goqu
+package goqueue
 
 import (
 	"time"
 
-	headerVal "github.com/bxcodec/goqu/headers/value"
+	headerVal "github.com/bxcodec/goqueue/headers/value"
 )
 
 // Message represents a message that will be published to the queue

@@ -4,11 +4,11 @@ import (
 	"context"
 	"time"
 
-	"github.com/bxcodec/goqu"
-	headerKey "github.com/bxcodec/goqu/headers/key"
-	headerVal "github.com/bxcodec/goqu/headers/value"
-	"github.com/bxcodec/goqu/middleware"
-	"github.com/bxcodec/goqu/publisher"
+	"github.com/bxcodec/goqueue"
+	headerKey "github.com/bxcodec/goqueue/headers/key"
+	headerVal "github.com/bxcodec/goqueue/headers/value"
+	"github.com/bxcodec/goqueue/middleware"
+	"github.com/bxcodec/goqueue/publisher"
 	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -20,7 +20,7 @@ type rabbitMQ struct {
 
 var defaultOption = func() *publisher.Option {
 	return &publisher.Option{
-		Middlewares: []goqu.PublisherMiddlewareFunc{},
+		Middlewares: []goqueue.PublisherMiddlewareFunc{},
 		PublisherID: uuid.New().String(),
 	}
 }
@@ -28,7 +28,7 @@ var defaultOption = func() *publisher.Option {
 func New(
 	publisherChannel *amqp.Channel,
 	opts ...publisher.OptionFunc,
-) goqu.Publisher {
+) goqueue.Publisher {
 	opt := defaultOption()
 	for _, o := range opts {
 		o(opt)
@@ -40,7 +40,7 @@ func New(
 	}
 }
 
-func (r *rabbitMQ) Publish(ctx context.Context, m goqu.Message) (err error) {
+func (r *rabbitMQ) Publish(ctx context.Context, m goqueue.Message) (err error) {
 	publishFunc := middleware.ApplyPublisherMiddleware(
 		r.buildPublisher(),
 		r.option.Middlewares...,
@@ -48,9 +48,9 @@ func (r *rabbitMQ) Publish(ctx context.Context, m goqu.Message) (err error) {
 	return publishFunc(ctx, m)
 }
 
-func (r *rabbitMQ) buildPublisher() goqu.PublisherFunc {
-	return func(ctx context.Context, m goqu.Message) (err error) {
-		data, err := goqu.GetGoquEncoding(m.ContentType).Encode(ctx, m)
+func (r *rabbitMQ) buildPublisher() goqueue.PublisherFunc {
+	return func(ctx context.Context, m goqueue.Message) (err error) {
+		data, err := goqueue.GetGoquEncoding(m.ContentType).Encode(ctx, m)
 		if err != nil {
 			return err
 		}

@@ -1,4 +1,4 @@
-module github.com/bxcodec/goqu
+module github.com/bxcodec/goqueue
 
 go 1.20
 

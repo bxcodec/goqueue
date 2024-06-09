@@ -1,11 +1,11 @@
-package goqu
+package goqueue
 
 import (
 	"context"
 	"encoding/json"
 	"sync"
 
-	headerVal "github.com/bxcodec/goqu/headers/value"
+	headerVal "github.com/bxcodec/goqueue/headers/value"
 )
 
 type EncoderFn func(ctx context.Context, m Message) (data []byte, err error)

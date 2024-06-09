@@ -1,11 +1,11 @@
 package publisher
 
-import "github.com/bxcodec/goqu"
+import "github.com/bxcodec/goqueue"
 
 // Option define the option property
 type Option struct {
 	PublisherID string
-	Middlewares []goqu.PublisherMiddlewareFunc
+	Middlewares []goqueue.PublisherMiddlewareFunc
 }
 
 // OptionFunc used for option chaining
@@ -17,7 +17,7 @@ func WithPublisherID(id string) OptionFunc {
 	}
 }
 
-func WithMiddlewares(middlewares ...goqu.PublisherMiddlewareFunc) OptionFunc {
+func WithMiddlewares(middlewares ...goqueue.PublisherMiddlewareFunc) OptionFunc {
 	return func(opt *Option) {
 		opt.Middlewares = middlewares
 	}

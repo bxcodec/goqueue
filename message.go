@@ -16,13 +16,17 @@ type Message struct {
 	Action        string                     `json:"action"`
 	Topic         string                     `json:"topic"`
 	Data          any                        `json:"data"`
-	ContentType   headerVal.ContentType      `json:"contentType"`
+	ContentType   headerVal.ContentType      `json:"-"`
 	Timestamp     time.Time                  `json:"timestamp"`
-	Headers       map[string]interface{}     `json:"headers"`
-	ServiceAgent  headerVal.GoquServiceAgent `json:"serviceAgent"`
+	Headers       map[string]interface{}     `json:"-"`
+	ServiceAgent  headerVal.GoquServiceAgent `json:"-"`
 	schemaVersion string
 }
 
 func (m *Message) SetSchemaVersion(v string) {
 	m.schemaVersion = v
+}
+
+func (m *Message) GetSchemaVersion() string {
+	return m.schemaVersion
 }

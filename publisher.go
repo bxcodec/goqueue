@@ -3,12 +3,16 @@ package goqueue
 import "context"
 
 // Publisher represents an interface for publishing messages.
+//
+//go:generate mockery --name Publisher
 type Publisher interface {
 	PublisherHandler
 	Close(ctx context.Context) (err error)
 }
 
 // PublisherHandler is an interface that defines the behavior of a message publisher.
+//
+//go:generate mockery --name PublisherHandler
 type PublisherHandler interface {
 	Publish(ctx context.Context, m Message) (err error)
 }

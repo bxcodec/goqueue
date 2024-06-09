@@ -1,4 +1,4 @@
-name: Unit Testing
+name: Integration Testing
 
 on:
   push:
@@ -20,9 +20,16 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+      - uses: getong/rabbitmq-action@v1.2
+        with:
+          rabbitmq version: "3.13.3-management-alpine"
+          host port: 5672
+          rabbitmq user: "test"
+          rabbitmq password: "test"
+          rabbitmq vhost: "test"
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
       - name: Run tests
-        run: make test
+        run: make integration-test-ci

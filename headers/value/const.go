@@ -4,9 +4,9 @@ package value
 type GoquServiceAgent string
 
 const (
-	RabbitMQ GoquServiceAgent = "rabbitmq"
-	SQS      GoquServiceAgent = "sqs"
-	SNS      GoquServiceAgent = "sns"
+	RabbitMQ GoquServiceAgent = "goqueue/rabbitmq"
+	SQS      GoquServiceAgent = "goqueue/sqs"
+	SNS      GoquServiceAgent = "goqueue/sns"
 )
 
 // ContentType represents the type of content in an the message

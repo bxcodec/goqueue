@@ -11,11 +11,18 @@ import (
 	"github.com/bxcodec/goqueue/publisher"
 	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/sirupsen/logrus"
+)
+
+const (
+	DefaultChannelPoolSize        = 5
+	ExchangeType           string = "topic"
+	DefaultContentType     string = "application/json"
 )
 
 type rabbitMQ struct {
-	publisherChannel *amqp.Channel
-	option           *publisher.Option
+	channelPool *ChannelPool
+	option      *publisher.Option
 }
 
 var defaultOption = func() *publisher.Option {
@@ -25,8 +32,8 @@ var defaultOption = func() *publisher.Option {
 	}
 }
 
-func New(
-	publisherChannel *amqp.Channel,
+func NewPublisher(
+	conn *amqp.Connection,
 	opts ...publisher.OptionFunc,
 ) goqueue.Publisher {
 	opt := defaultOption()
@@ -34,13 +41,23 @@ func New(
 		o(opt)
 	}
 
+	channelPool := NewChannelPool(conn, DefaultChannelPoolSize)
+	ch, err := channelPool.Get()
+	if err != nil {
+		logrus.Fatal(err)
+	}
+	defer channelPool.Return(ch)
+
 	return &rabbitMQ{
-		publisherChannel: publisherChannel,
-		option:           opt,
+		channelPool: channelPool,
+		option:      opt,
 	}
 }
 
 func (r *rabbitMQ) Publish(ctx context.Context, m goqueue.Message) (err error) {
+	if m.ContentType == "" {
+		m.ContentType = publisher.DefaultContentType
+	}
 	publishFunc := middleware.ApplyPublisherMiddleware(
 		r.buildPublisher(),
 		r.option.Middlewares...,
@@ -50,11 +67,6 @@ func (r *rabbitMQ) Publish(ctx context.Context, m goqueue.Message) (err error) {
 
 func (r *rabbitMQ) buildPublisher() goqueue.PublisherFunc {
 	return func(ctx context.Context, m goqueue.Message) (err error) {
-		data, err := goqueue.GetGoquEncoding(m.ContentType).Encode(ctx, m)
-		if err != nil {
-			return err
-		}
-
 		id := m.ID
 		if id == "" {
 			id = uuid.New().String()
@@ -66,11 +78,12 @@ func (r *rabbitMQ) buildPublisher() goqueue.PublisherFunc {
 		}
 
 		defaultHeaders := map[string]interface{}{
+			headerKey.AppID:              r.option.PublisherID,
 			headerKey.MessageID:          id,
 			headerKey.PublishedTimestamp: timestamp.Format(time.RFC3339),
 			headerKey.RetryCount:         0,
-			headerKey.ContentType:        m.ContentType,
-			headerKey.QueueServiceAgent:  headerVal.RabbitMQ,
+			headerKey.ContentType:        string(m.ContentType),
+			headerKey.QueueServiceAgent:  string(headerVal.RabbitMQ),
 			headerKey.SchemaVer:          headerVal.GoquMessageSchemaVersionV1,
 		}
 
@@ -82,7 +95,26 @@ func (r *rabbitMQ) buildPublisher() goqueue.PublisherFunc {
 			headers[key] = value
 		}
 
-		return r.publisherChannel.PublishWithContext(
+		m.Headers = headers
+		m.ServiceAgent = headerVal.RabbitMQ
+		m.Timestamp = timestamp
+		m.ID = id
+		encoder, ok := goqueue.GetGoquEncoding(m.ContentType)
+		if !ok {
+			encoder = goqueue.DefaultEncoding
+		}
+
+		data, err := encoder.Encode(ctx, m)
+		if err != nil {
+			return err
+		}
+
+		ch, err := r.channelPool.Get()
+		if err != nil {
+			return err
+		}
+		defer r.channelPool.Return(ch)
+		return ch.PublishWithContext(
 			ctx,
 			m.Topic,  // exchange
 			m.Action, // routing-key
@@ -101,5 +133,5 @@ func (r *rabbitMQ) buildPublisher() goqueue.PublisherFunc {
 
 // Close will close the connection
 func (r *rabbitMQ) Close(_ context.Context) (err error) {
-	return r.publisherChannel.Close()
+	return r.channelPool.Close()
 }

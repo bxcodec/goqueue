@@ -1,0 +1,81 @@
+{
+  "rabbit_version": "3.5.7",
+  "users": [
+    {
+      "name": "test",
+      "password": "test",
+      "tags": "management"
+    },
+    {
+      "name": "rabbitmq",
+      "password": "rabbitmq",
+      "tags": "management"
+    }
+  ],
+  "vhosts": [
+    {
+      "name": "/"
+    },
+    {
+      "name": "dev"
+    },
+    {
+      "name": "test"
+    }
+  ],
+  "permissions": [
+    {
+      "user": "rabbitmq",
+      "vhost": "dev",
+      "configure": ".*",
+      "write": ".*",
+      "read": ".*"
+    },
+    {
+      "user": "rabbitmq",
+      "vhost": "/",
+      "configure": ".*",
+      "write": ".*",
+      "read": ".*"
+    },
+    {
+      "user": "test",
+      "vhost": "test",
+      "configure": ".*",
+      "write": ".*",
+      "read": ".*"
+    }
+  ],
+  "parameters": [],
+  "policies": [],
+  "queues": [
+    {
+      "name": "testqueue",
+      "vhost": "test",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    }
+  ],
+  "exchanges": [
+    {
+      "name": "goqueue-exchange-test",
+      "vhost": "test",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    }
+  ],
+  "bindings": [
+    {
+      "source": "goqueue-exchange-test",
+      "vhost": "test",
+      "destination": "testqueue",
+      "destination_type": "queue",
+      "routing_key": "goqueue.*",
+      "arguments": {}
+    }
+  ]
+}

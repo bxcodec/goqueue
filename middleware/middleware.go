@@ -11,8 +11,8 @@ import (
 // It takes an inbound message handler function `h` and a variadic list of middleware functions `middleware`.
 // Each middleware function is applied to the handler function in the order they are provided.
 // The resulting handler function with all the middleware applied is returned.
-func ApplyHandlerMiddleware(h goqueue.InboundMessageHandlerFunc, middleware ...goqueue.InboundMessageHandlerMiddlewareFunc) goqueue.InboundMessageHandlerFunc {
-	for _, middleware := range middleware {
+func ApplyHandlerMiddleware(h goqueue.InboundMessageHandlerFunc, middlewares ...goqueue.InboundMessageHandlerMiddlewareFunc) goqueue.InboundMessageHandlerFunc {
+	for _, middleware := range middlewares {
 		h = middleware(h)
 	}
 	return h
@@ -21,23 +21,23 @@ func ApplyHandlerMiddleware(h goqueue.InboundMessageHandlerFunc, middleware ...g
 // ApplyPublisherMiddleware applies the given publisher middleware functions to the provided publisher function.
 // It iterates over the middleware functions and applies them in the order they are provided.
 // The resulting publisher function is returned.
-func ApplyPublisherMiddleware(p goqueue.PublisherFunc, middleware ...goqueue.PublisherMiddlewareFunc) goqueue.PublisherFunc {
-	for _, middleware := range middleware {
+func ApplyPublisherMiddleware(p goqueue.PublisherFunc, middlewares ...goqueue.PublisherMiddlewareFunc) goqueue.PublisherFunc {
+	for _, middleware := range middlewares {
 		p = middleware(p)
 	}
 	return p
 }
 
-// HelloWorldMiddlewareExecuteAfterHandler returns an inbound message handler middleware function.
+// HelloWorldMiddlewareExecuteAfterInboundMessageHandler returns an inbound message handler middleware function.
 // It wraps the provided `next` inbound message handler function and executes some additional logic after it.
 // The additional logic includes logging any error that occurred during the execution of the `next` function
 // and logging a message indicating that the middleware has been executed.
-func HelloWorldMiddlewareExecuteAfterHandler() goqueue.InboundMessageHandlerMiddlewareFunc {
+func HelloWorldMiddlewareExecuteAfterInboundMessageHandler() goqueue.InboundMessageHandlerMiddlewareFunc {
 	return func(next goqueue.InboundMessageHandlerFunc) goqueue.InboundMessageHandlerFunc {
 		return func(ctx context.Context, m goqueue.InboundMessage) (err error) {
 			err = next(ctx, m)
 			if err != nil {
-				logrus.Error("Error: ", err, "processing to sent the error to Sentry")
+				logrus.Error("Error: ", err, "add your custom error handler here, eg send to Sentry or other error tracking tools")
 			}
 			logrus.Info("hello-world-last-middleware executed")
 			return err
@@ -45,8 +45,8 @@ func HelloWorldMiddlewareExecuteAfterHandler() goqueue.InboundMessageHandlerMidd
 	}
 }
 
-// HelloWorldMiddlewareExecuteBeforeHandler returns a middleware function that logs a message before executing the handler.
-func HelloWorldMiddlewareExecuteBeforeHandler() goqueue.InboundMessageHandlerMiddlewareFunc {
+// HelloWorldMiddlewareExecuteBeforeInboundMessageHandler returns a middleware function that logs a message before executing the handler.
+func HelloWorldMiddlewareExecuteBeforeInboundMessageHandler() goqueue.InboundMessageHandlerMiddlewareFunc {
 	return func(next goqueue.InboundMessageHandlerFunc) goqueue.InboundMessageHandlerFunc {
 		return func(ctx context.Context, m goqueue.InboundMessage) (err error) {
 			logrus.Info("hello-world-first-middleware executed")

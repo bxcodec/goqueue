@@ -1,6 +1,13 @@
 package publisher
 
-import "github.com/bxcodec/goqueue"
+import (
+	"github.com/bxcodec/goqueue"
+	headerVal "github.com/bxcodec/goqueue/headers/value"
+)
+
+const (
+	DefaultContentType = headerVal.ContentTypeJSON
+)
 
 // Option define the option property
 type Option struct {

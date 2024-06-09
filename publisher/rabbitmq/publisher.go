@@ -41,6 +41,9 @@ func New(
 }
 
 func (r *rabbitMQ) Publish(ctx context.Context, m goqueue.Message) (err error) {
+	if m.ContentType == "" {
+		m.ContentType = publisher.DefaultContentType
+	}
 	publishFunc := middleware.ApplyPublisherMiddleware(
 		r.buildPublisher(),
 		r.option.Middlewares...,
@@ -79,7 +82,6 @@ func (r *rabbitMQ) buildPublisher() goqueue.PublisherFunc {
 
 		m.Headers = headers
 		m.ServiceAgent = headerVal.RabbitMQ
-		m.ContentType = headerVal.ContentType(m.ContentType)
 		m.Timestamp = timestamp
 		m.ID = id
 		data, err := goqueue.GetGoquEncoding(m.ContentType).Encode(ctx, m)

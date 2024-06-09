@@ -1,12 +1,12 @@
 package key
 
 const (
-	AppID              = "goqu-app-id"
-	PublishedTimestamp = "goqu-published-timestamp"
-	RequeuedTimestamp  = "goqu-requeued-timestamp"
-	RetryCount         = "goqu-retry-count"
-	SchemaVer          = "goqu-schema-version"
-	ContentType        = "goqu-content-type"
-	QueueServiceAgent  = "goqu-queue-service-agent"
-	MessageID          = "goqu-message-id"
+	AppID              = "goqueue-app-id"
+	PublishedTimestamp = "goqueue-published-timestamp"
+	RequeuedTimestamp  = "goqueue-requeued-timestamp"
+	RetryCount         = "goqueue-retry-count"
+	SchemaVer          = "goqueue-schema-version"
+	ContentType        = "goqueue-content-type"
+	QueueServiceAgent  = "goqueue-queue-service-agent"
+	MessageID          = "goqueue-message-id"
 )

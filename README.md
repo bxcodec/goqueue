@@ -1,2 +1,3 @@
-# goqu
-GoQu - Golang Queue Wrapper for all queue platforms
+# goqueue
+
+GoQueue - Golang Queue Wrapper for all queue platforms

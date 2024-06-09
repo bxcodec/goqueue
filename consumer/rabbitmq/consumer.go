@@ -9,11 +9,11 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/sirupsen/logrus"
 
-	"github.com/bxcodec/goqu"
-	"github.com/bxcodec/goqu/consumer"
-	headerKey "github.com/bxcodec/goqu/headers/key"
-	headerVal "github.com/bxcodec/goqu/headers/value"
-	"github.com/bxcodec/goqu/middleware"
+	"github.com/bxcodec/goqueue"
+	"github.com/bxcodec/goqueue/consumer"
+	headerKey "github.com/bxcodec/goqueue/headers/key"
+	headerVal "github.com/bxcodec/goqueue/headers/value"
+	"github.com/bxcodec/goqueue/middleware"
 )
 
 // rabbitMQ is the subscriber handler for rabbitmq
@@ -28,7 +28,7 @@ type rabbitMQ struct {
 
 var defaultOption = func() *consumer.Option {
 	return &consumer.Option{
-		Middlewares: []goqu.InboundMessageHandlerMiddlewareFunc{},
+		Middlewares: []goqueue.InboundMessageHandlerMiddlewareFunc{},
 	}
 }
 
@@ -37,7 +37,7 @@ func NewConsumer(
 	client *amqp.Connection,
 	consumerChannel *amqp.Channel,
 	requeueChannel *amqp.Channel,
-	opts ...consumer.OptionFunc) goqu.Consumer {
+	opts ...consumer.OptionFunc) goqueue.Consumer {
 	opt := defaultOption()
 	for _, o := range opts {
 		o(opt)
@@ -84,7 +84,7 @@ func (r *rabbitMQ) initConsumer() {
 		false,
 		// queue arguments
 		// TODO(bxcodec): to support custom queue arguments on consumer initialization
-		// https://github.com/bxcodec/goqu/issues/1
+		// https://github.com/bxcodec/goqueue/issues/1
 		nil,
 	)
 	if err != nil {
@@ -99,7 +99,7 @@ func (r *rabbitMQ) initConsumer() {
 // If the context is canceled, the method stops consuming messages and returns.
 // The method returns an error if there was an issue consuming messages.
 func (r *rabbitMQ) Consume(ctx context.Context,
-	h goqu.InboundMessageHandler,
+	h goqueue.InboundMessageHandler,
 	meta map[string]interface{}) (err error) {
 	logrus.WithFields(logrus.Fields{
 		"queue_name":    r.option.QueueName,
@@ -115,7 +115,7 @@ func (r *rabbitMQ) Consume(ctx context.Context,
 			}).Info("stopping the worker")
 			return
 		case receivedMsg := <-r.msgReceiver:
-			msg := &goqu.Message{
+			msg := &goqueue.Message{
 				ID:           extractHeaderString(receivedMsg.Headers, headerKey.AppID),
 				Timestamp:    extractHeaderTime(receivedMsg.Headers, headerKey.PublishedTimestamp),
 				Action:       receivedMsg.RoutingKey,
@@ -126,7 +126,7 @@ func (r *rabbitMQ) Consume(ctx context.Context,
 				ServiceAgent: headerVal.GoquServiceAgent(extractHeaderString(receivedMsg.Headers, headerKey.QueueServiceAgent)),
 			}
 			msg.SetSchemaVersion(extractHeaderString(receivedMsg.Headers, headerKey.SchemaVer))
-			m := goqu.InboundMessage{
+			m := goqueue.InboundMessage{
 				Message:    *msg,
 				RetryCount: extractHeaderInt(receivedMsg.Headers, headerKey.RetryCount),
 				Metadata: map[string]interface{}{
@@ -161,9 +161,9 @@ func (r *rabbitMQ) Consume(ctx context.Context,
 					err = receivedMsg.Nack(false, false)
 					return
 				},
-				Requeue: func(ctx context.Context, delayFn goqu.DelayFn) (err error) {
+				Requeue: func(ctx context.Context, delayFn goqueue.DelayFn) (err error) {
 					if delayFn == nil {
-						delayFn = goqu.DefaultDelayFn
+						delayFn = goqueue.DefaultDelayFn
 					}
 					retries := extractHeaderInt(receivedMsg.Headers, headerKey.RetryCount)
 					retries++

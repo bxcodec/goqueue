@@ -1,4 +1,4 @@
-package goqu
+package goqueue
 
 import (
 	"context"

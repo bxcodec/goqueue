@@ -1,4 +1,4 @@
-package goqu
+package goqueue
 
 type DelayFn func(retries int64) (delay int64)
 

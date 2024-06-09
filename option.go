@@ -1,7 +1,7 @@
-package goqu
+package goqueue
 
 type Option struct {
-	// number of consumer/worker/goroutine that will be spawned in one goqu instance
+	// number of consumer/worker/goroutine that will be spawned in one goqueue instance
 	NumberOfConsumer int
 	Consumer         Consumer
 	Publisher        Publisher

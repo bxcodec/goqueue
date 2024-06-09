@@ -39,6 +39,12 @@ integration-test: docker-test
 	@echo "Running Integration Tests"
 	@gotestsum $(TESTS_ARGS)
 	@cat gotestsum.json.out | $(TPARSE) -all -notests
+
+integration-test-ci:
+	@echo "Running Integration Tests"
+	@gotestsum $(TESTS_ARGS)
+	@cat gotestsum.json.out | $(TPARSE) -all -notests
+
 docker-clean:
 	@docker-compose -f test.compose.yaml down
 

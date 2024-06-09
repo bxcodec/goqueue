@@ -34,7 +34,6 @@ type rabbitMQTestSuite struct {
 	conn            *amqp.Connection
 	publishChannel  *amqp.Channel
 	consumerChannel *amqp.Channel
-	queue           *amqp.Queue
 }
 
 func TestSuiteRabbitMQConsumer(t *testing.T) {
@@ -106,7 +105,6 @@ func (s *rabbitMQTestSuite) initQueueForTesting(t *testing.T, exchangePattern ..
 		nil,                   // arguments
 	)
 	require.NoError(t, err)
-	s.queue = &q
 
 	for _, patternRoutingKey := range exchangePattern {
 		logrus.Printf("binding queue %s to exchange %s with routing key %s",
@@ -150,7 +148,7 @@ func (s *rabbitMQTestSuite) seedPublish(contentType string, action string) {
 			Headers: amqp.Table{
 				headerKey.PublishedTimestamp: mockData.Timestamp.Format(time.RFC3339),
 				headerKey.MessageID:          uuid.New().String(),
-				headerKey.RetryCount:         1,
+				headerKey.RetryCount:         0,
 				headerKey.ContentType:        contentType,
 				headerKey.SchemaVer:          string(headerVal.GoquMessageSchemaVersionV1),
 				headerKey.QueueServiceAgent:  string(headerVal.RabbitMQ),
@@ -224,7 +222,7 @@ func handler(t *testing.T, expected goqueue.Message) goqueue.InboundMessageHandl
 			assert.JSONEq(t, string(expectedJSON), string(actualJSON))
 		}
 
-		assert.EqualValues(t, 1, m.RetryCount)
+		assert.EqualValues(t, 0, m.RetryCount)
 		err = m.Ack(ctx)
 		assert.NoError(t, err)
 

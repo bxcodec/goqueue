@@ -20,10 +20,9 @@ import (
 )
 
 const (
-	rabbitMQTestQueueName = "testqueuesubscriber"
-	testExchange          = "goqueue-exchange-test"
+	rabbitMQTestQueueName = "testqueuepublisher"
+	testExchange          = "goqueue-exchange-test-publish"
 	testAction            = "goqueue.action.test"
-	testActionRequeue     = "goqueue.action.testrequeue"
 )
 
 type rabbitMQTestSuite struct {
@@ -32,7 +31,6 @@ type rabbitMQTestSuite struct {
 	conn            *amqp.Connection
 	publishChannel  *amqp.Channel
 	consumerChannel *amqp.Channel
-	queue           *amqp.Queue
 }
 
 func TestSuiteRabbitMQPublisher(t *testing.T) {
@@ -93,6 +91,31 @@ func (s *rabbitMQTestSuite) initConnection(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func (s *rabbitMQTestSuite) initQueueForTesting(t *testing.T, exchangePattern ...string) {
+	q, err := s.consumerChannel.QueueDeclare(
+		rabbitMQTestQueueName, // name
+		true,                  // durable
+		false,                 // auto_delete
+		false,                 // exclusive
+		false,                 // no-wait
+		nil,                   // arguments
+	)
+	require.NoError(t, err)
+
+	for _, patternRoutingKey := range exchangePattern {
+		logrus.Printf("binding queue %s to exchange %s with routing key %s",
+			q.Name, testExchange, patternRoutingKey)
+
+		err = s.consumerChannel.QueueBind(
+			rabbitMQTestQueueName, // queue name
+			patternRoutingKey,     // routing key
+			testExchange,          // exchange
+			false,
+			nil)
+
+		require.NoError(t, err)
+	}
+}
 func (s *rabbitMQTestSuite) getMockData(action string, identifier string) (res goqueue.Message) {
 	res = goqueue.Message{
 		Action:      action,
@@ -109,6 +132,7 @@ func (s *rabbitMQTestSuite) getMockData(action string, identifier string) (res g
 }
 
 func (s *rabbitMQTestSuite) TestPublisher() {
+	s.initQueueForTesting(s.T(), testAction)
 	publisher := rmq.NewPublisher(s.conn,
 		publisher.WithPublisherID("test-publisher"),
 	)

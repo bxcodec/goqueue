@@ -26,9 +26,11 @@ TESTS_ARGS += -test.count    1
 TESTS_ARGS += -test.failfast
 TESTS_ARGS += -test.coverprofile   coverage.out
 TESTS_ARGS += -test.timeout        60s
-TESTS_ARGS += -race
+TESTS_ARGS_WITHRACE := $(TESTS_ARGS)
+TESTS_ARGS_WITHRACE += -race
+
 run-tests: $(GOTESTSUM)
-	@gotestsum $(TESTS_ARGS) -short
+	@gotestsum $(TESTS_ARGS_WITHRACE) -short
 
 test: run-tests $(TPARSE) ## Run Tests & parse details
 	@cat gotestsum.json.out | $(TPARSE) -all -notests

@@ -22,6 +22,9 @@ var (
 		err = json.Unmarshal(data, &m)
 		return
 	}
+
+	DefaultEncoder EncoderFn = JSONEncoder
+	DefaultDecoder DecoderFn = JSONDecoder
 )
 
 var (
@@ -32,11 +35,11 @@ func AddGoquEncoding(contentType headerVal.ContentType, encoding *Encoding) {
 	GoquEncodingMap.Store(contentType, encoding)
 }
 
-func GetGoquEncoding(contentType headerVal.ContentType) *Encoding {
+func GetGoquEncoding(contentType headerVal.ContentType) (res *Encoding, ok bool) {
 	if encoding, ok := GoquEncodingMap.Load(contentType); ok {
-		return encoding.(*Encoding)
+		return encoding.(*Encoding), ok
 	}
-	return nil
+	return nil, false
 }
 
 type Encoding struct {
@@ -51,4 +54,5 @@ var (
 		Encode:      JSONEncoder,
 		Decode:      JSONDecoder,
 	}
+	DefaultEncoding = JSONEncoding
 )

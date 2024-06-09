@@ -40,7 +40,7 @@ integration-test: docker-test
 	@gotestsum $(TESTS_ARGS)
 	@cat gotestsum.json.out | $(TPARSE) -all -notests
 
-integration-test-ci:
+integration-test-ci: $(GOTESTSUM) $(TPARSE)
 	@echo "Running Integration Tests"
 	@gotestsum $(TESTS_ARGS)
 	@cat gotestsum.json.out | $(TPARSE) -all -notests

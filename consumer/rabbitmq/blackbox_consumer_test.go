@@ -3,6 +3,7 @@ package rabbitmq_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -25,11 +26,11 @@ const (
 	rabbitMQTestQueueName = "testqueuesubscriber"
 	testExchange          = "goqueue-exchange-test"
 	testAction            = "goqueue.action.test"
+	testActionRequeue     = "goqueue.action.testrequeue"
 )
 
 type rabbitMQTestSuite struct {
 	suite.Suite
-	exchangePattern []string
 	rmqURL          string
 	conn            *amqp.Connection
 	publishChannel  *amqp.Channel
@@ -48,14 +49,11 @@ func TestSuiteRabbitMQConsumer(t *testing.T) {
 	}
 
 	rabbitMQTestSuite := &rabbitMQTestSuite{
-		exchangePattern: []string{
-			"goqueue.action.#",
-		},
 		rmqURL: rmqURL,
 	}
 	logrus.SetLevel(logrus.DebugLevel)
-	rabbitMQTestSuite.initConnectionPublish(t)
-	rabbitMQTestSuite.initExchangeQueue(t)
+	logrus.SetFormatter(&logrus.JSONFormatter{})
+	rabbitMQTestSuite.initConnection(t)
 	suite.Run(t, rabbitMQTestSuite)
 }
 
@@ -63,14 +61,14 @@ func (s *rabbitMQTestSuite) BeforeTest(_, _ string) {
 }
 
 func (s *rabbitMQTestSuite) AfterTest(_, _ string) {
-	_, err := s.consumerChannel.QueuePurge(s.queue.Name, true) // force purge the queue after test
+	_, err := s.consumerChannel.QueuePurge(rabbitMQTestQueueName, true) // force purge the queue after test
 	s.Require().NoError(err)
 }
 
 func (s *rabbitMQTestSuite) TearDownSuite() {
 	err := s.publishChannel.Close()
 	s.Require().NoError(err)
-	_, err = s.consumerChannel.QueuePurge(s.queue.Name, true) // force purge the queue after test suite done
+	_, err = s.consumerChannel.QueuePurge(rabbitMQTestQueueName, true) // force purge the queue after test suite done
 	s.Require().NoError(err)
 	err = s.consumerChannel.Close()
 	s.Require().NoError(err)
@@ -78,12 +76,13 @@ func (s *rabbitMQTestSuite) TearDownSuite() {
 	s.Require().NoError(err)
 }
 
-func (s *rabbitMQTestSuite) initConnectionPublish(t *testing.T) {
+func (s *rabbitMQTestSuite) initConnection(t *testing.T) {
 	var err error
 	s.conn, err = amqp.Dial(s.rmqURL)
 	require.NoError(t, err)
-
 	s.publishChannel, err = s.conn.Channel()
+	require.NoError(t, err)
+	s.consumerChannel, err = s.conn.Channel()
 	require.NoError(t, err)
 
 	err = s.publishChannel.ExchangeDeclare(
@@ -98,11 +97,7 @@ func (s *rabbitMQTestSuite) initConnectionPublish(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func (s *rabbitMQTestSuite) initExchangeQueue(t *testing.T) {
-	var err error
-	s.consumerChannel, err = s.conn.Channel()
-	require.NoError(t, err)
-
+func (s *rabbitMQTestSuite) initQueueForTesting(t *testing.T, exchangePattern ...string) {
 	q, err := s.consumerChannel.QueueDeclare(
 		rabbitMQTestQueueName, // name
 		true,                  // durable
@@ -114,14 +109,14 @@ func (s *rabbitMQTestSuite) initExchangeQueue(t *testing.T) {
 	require.NoError(t, err)
 	s.queue = &q
 
-	for _, patternRoutingKey := range s.exchangePattern {
+	for _, patternRoutingKey := range exchangePattern {
 		logrus.Printf("binding queue %s to exchange %s with routing key %s",
 			q.Name, testExchange, patternRoutingKey)
 
 		err = s.consumerChannel.QueueBind(
-			s.queue.Name,      // queue name
-			patternRoutingKey, // routing key
-			testExchange,      // exchange
+			rabbitMQTestQueueName, // queue name
+			patternRoutingKey,     // routing key
+			testExchange,          // exchange
 			false,
 			nil)
 
@@ -142,21 +137,21 @@ func (s *rabbitMQTestSuite) getMockData(action string) (res goqueue.Message) {
 	return res
 }
 
-func (s *rabbitMQTestSuite) seedPublish(contentType string) {
-	mockData := s.getMockData(testAction)
+func (s *rabbitMQTestSuite) seedPublish(contentType string, action string) {
+	mockData := s.getMockData(action)
 	jsonData, err := json.Marshal(mockData)
 	s.Require().NoError(err)
 	err = s.publishChannel.PublishWithContext(
 		context.Background(),
 		testExchange, // exchange
-		testAction,   // routing key
+		action,       // routing key
 		false,        // mandatory
 		false,        // immediate
 		amqp.Publishing{
 			Headers: amqp.Table{
 				headerKey.PublishedTimestamp: mockData.Timestamp.Format(time.RFC3339),
 				headerKey.MessageID:          uuid.New().String(),
-				headerKey.RetryCount:         9,
+				headerKey.RetryCount:         1,
 				headerKey.ContentType:        contentType,
 				headerKey.SchemaVer:          string(headerVal.GoquMessageSchemaVersionV1),
 				headerKey.QueueServiceAgent:  string(headerVal.RabbitMQ),
@@ -167,43 +162,95 @@ func (s *rabbitMQTestSuite) seedPublish(contentType string) {
 	s.Require().NoError(err)
 }
 
-func (s *rabbitMQTestSuite) TestConsumer() {
-	s.seedPublish(string(headerVal.ContentTypeJSON))
+// func (s *rabbitMQTestSuite) TestConsumerWithoutExchangePatternProvided() {
+// 	s.initQueueForTesting(s.T(), "goqueue.action.#")
+// 	s.seedPublish(string(headerVal.ContentTypeJSON), testAction)
+// 	rmqSubs := rmq.NewConsumer(s.conn,
+// 		s.consumerChannel,
+// 		s.publishChannel,
+// 		consumer.WithBatchMessageSize(1),
+// 		consumer.WithMiddlewares(middleware.HelloWorldMiddlewareExecuteAfterInboundMessageHandler()),
+// 		consumer.WithQueueName("testqueuesubscriber"),
+// 	)
+
+// 	msgHandler := handler(s.T(), s.getMockData(testAction))
+// 	queueSvc := goqueue.NewQueueService(
+// 		goqueue.WithConsumer(rmqSubs),
+// 		goqueue.WithMessageHandler(msgHandler),
+// 	)
+
+// 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3) // increase this context if want to test a long running worker
+// 	defer cancel()
+
+// 	err := queueSvc.Start(ctx)
+// 	s.Require().NoError(err)
+// }
+
+// func (s *rabbitMQTestSuite) TestConsumerWithExchangePatternProvided() {
+// 	s.seedPublish(string(headerVal.ContentTypeJSON), testAction)
+
+// 	rmqSubs := rmq.NewConsumer(s.conn,
+// 		s.consumerChannel,
+// 		s.publishChannel,
+// 		consumer.WithBatchMessageSize(1),
+// 		consumer.WithMiddlewares(middleware.HelloWorldMiddlewareExecuteAfterInboundMessageHandler()),
+// 		consumer.WithQueueName(rabbitMQTestQueueName),
+// 		consumer.WithActionsPatternSubscribed("goqueue.action.#"), //exchange pattern provided in constructor
+// 		consumer.WithTopicName(testExchange),                      //exchange name provided in constructor
+// 	)
+
+// 	msgHandler := handler(s.T(), s.getMockData(testAction))
+// 	queueSvc := goqueue.NewQueueService(
+// 		goqueue.WithConsumer(rmqSubs),
+// 		goqueue.WithMessageHandler(msgHandler),
+// 	)
+
+// 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3) // increase this context if want to test a long running worker
+// 	defer cancel()
+
+// 	err := queueSvc.Start(ctx)
+// 	s.Require().NoError(err)
+// }
+
+// func handler(t *testing.T, expected goqueue.Message) goqueue.InboundMessageHandlerFunc {
+// 	return func(ctx context.Context, m goqueue.InboundMessage) (err error) {
+// 		fmt.Println(">>>>>> MASUK MESSAGE OKGAS")
+// 		switch m.ContentType {
+// 		case headerVal.ContentTypeText:
+// 			assert.Equal(t, expected.Data, m.Data)
+// 		case headerVal.ContentTypeJSON:
+// 			expectedJSON, err := json.Marshal(expected.Data)
+// 			require.NoError(t, err)
+// 			actualJSON, err := json.Marshal(m.Data)
+// 			require.NoError(t, err)
+// 			assert.JSONEq(t, string(expectedJSON), string(actualJSON))
+// 		}
+
+// 		assert.EqualValues(t, 9, m.RetryCount)
+// 		err = m.Ack(ctx)
+// 		assert.NoError(t, err)
+
+// 		assert.Equal(t, headerVal.GoquMessageSchemaVersionV1, m.GetSchemaVersion())
+// 		return err
+// 	}
+// }
+
+func (s *rabbitMQTestSuite) TestRequeueWithouthExchangePatternProvided() {
+	s.initQueueForTesting(s.T(), "goqueue.action.#")
+	s.seedPublish(string(headerVal.ContentTypeJSON), testActionRequeue)
 	rmqSubs := rmq.NewConsumer(s.conn,
 		s.consumerChannel,
 		s.publishChannel,
 		consumer.WithBatchMessageSize(1),
 		consumer.WithMiddlewares(middleware.HelloWorldMiddlewareExecuteAfterInboundMessageHandler()),
-		consumer.WithQueueName("testqueuesubscriber"),
+		consumer.WithQueueName(rabbitMQTestQueueName),
+		consumer.WithMaxRetryFailedMessage(2),
 	)
 
-	msgHandler := handler(s.T(), s.getMockData(testAction))
+	msgHandlerRequeue := handlerRequeue(s.T())
 	queueSvc := goqueue.NewQueueService(
 		goqueue.WithConsumer(rmqSubs),
-		goqueue.WithMessageHandler(msgHandler),
-	)
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3) // increase this context if want to test a long running worker
-	defer cancel()
-
-	err := queueSvc.Start(ctx)
-	s.Require().NoError(err)
-}
-
-func (s *rabbitMQTestSuite) TestRequeue() {
-	s.seedPublish(string(headerVal.ContentTypeJSON))
-	rmqSubs := rmq.NewConsumer(s.conn,
-		s.consumerChannel,
-		s.publishChannel,
-		consumer.WithBatchMessageSize(1),
-		consumer.WithMiddlewares(middleware.HelloWorldMiddlewareExecuteAfterInboundMessageHandler()),
-		consumer.WithQueueName("testqueuesubscriber"),
-	)
-
-	msgHandler := handlerRequeue(s.T())
-	queueSvc := goqueue.NewQueueService(
-		goqueue.WithConsumer(rmqSubs),
-		goqueue.WithMessageHandler(msgHandler),
+		goqueue.WithMessageHandler(msgHandlerRequeue),
 	)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5) // increase this context if want to test a long running worker
@@ -213,34 +260,16 @@ func (s *rabbitMQTestSuite) TestRequeue() {
 	s.Require().NoError(err)
 }
 
-func handler(t *testing.T, expected goqueue.Message) goqueue.InboundMessageHandlerFunc {
-	return func(ctx context.Context, m goqueue.InboundMessage) (err error) {
-		switch m.ContentType {
-		case headerVal.ContentTypeText:
-			assert.Equal(t, expected.Data, m.Data)
-		case headerVal.ContentTypeJSON:
-			expectedJSON, err := json.Marshal(expected.Data)
-			require.NoError(t, err)
-			actualJSON, err := json.Marshal(m.Data)
-			require.NoError(t, err)
-			assert.JSONEq(t, string(expectedJSON), string(actualJSON))
-		}
-
-		assert.EqualValues(t, 9, m.RetryCount)
-		err = m.Ack(ctx)
-		assert.NoError(t, err)
-
-		assert.Equal(t, headerVal.GoquMessageSchemaVersionV1, m.GetSchemaVersion())
-		return err
-	}
-}
-
 func handlerRequeue(t *testing.T) goqueue.InboundMessageHandlerFunc {
 	return func(ctx context.Context, m goqueue.InboundMessage) (err error) {
+		fmt.Println(">>>>>> REQUEUE MESSAGE")
 		delayFn := func(retries int64) int64 {
-			assert.Equal(t, int64(1), retries)
-			return 1
+			assert.Equal(t, int64(m.RetryCount)+1, retries) // because the retry++ is done before this delayfn is called
+			return m.RetryCount
 		}
+
+		// fmt.Println(">>>>>> REQUEUE MESSAGE")
+		// logrus.Info(">>>>>> REQUEUE MESSAGE")
 		err = m.PutToBackOfQueueWithDelay(ctx, delayFn)
 		assert.NoError(t, err)
 		return

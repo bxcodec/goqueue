@@ -30,7 +30,9 @@ type rabbitMQ struct {
 
 var defaultOption = func() *consumer.Option {
 	return &consumer.Option{
-		Middlewares: []goqueue.InboundMessageHandlerMiddlewareFunc{},
+		Middlewares:           []goqueue.InboundMessageHandlerMiddlewareFunc{},
+		BatchMessageSize:      consumer.DefaultBatchMessageSize,
+		MaxRetryFailedMessage: consumer.DefaultMaxRetryFailedMessage,
 	}
 }
 
@@ -50,8 +52,44 @@ func NewConsumer(
 		requeueChannel:  requeueChannel,
 		option:          opt,
 	}
+	if len(opt.ActionsPatternSubscribed) > 0 {
+		rmqHandler.initQueue()
+	}
 	rmqHandler.initConsumer()
 	return rmqHandler
+}
+
+func (r *rabbitMQ) initQueue() {
+	// QueueDeclare declares a queue on the consumer's channel with the specified parameters.
+	// It takes the queue name, durable, autoDelete, exclusive, noWait, and arguments as arguments.
+	// Returns an instance of amqp.Queue and any error encountered.
+	// Please refer to the RabbitMQ documentation for more information on the parameters.
+	// https://www.rabbitmq.com/amqp-0-9-1-reference.html#queue.declare
+	// (from bxcodec: please raise a PR if you need a custom queue argument)
+	_, err := r.consumerChannel.QueueDeclare(
+		r.option.QueueName,
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		logrus.Fatal("error declaring the queue, ", err)
+	}
+
+	for _, eventType := range r.option.ActionsPatternSubscribed {
+		err = r.consumerChannel.QueueBind(
+			r.option.QueueName,
+			eventType,
+			r.option.TopicName,
+			false,
+			nil,
+		)
+		if err != nil {
+			logrus.Fatal("error binding the queue, ", err)
+		}
+	}
 }
 
 // initConsumer initializes the consumer for the RabbitMQ instance.
@@ -120,20 +158,39 @@ func (r *rabbitMQ) Consume(ctx context.Context,
 			msg, err := buildMessage(meta, receivedMsg)
 			if err != nil {
 				if err == errors.ErrInvalidMessageFormat {
-					ackErr := receivedMsg.Ack(false)
-					if ackErr != nil {
+					nackErr := receivedMsg.Nack(false, false) // nack with requeue false
+					if nackErr != nil {
 						logrus.WithFields(logrus.Fields{
 							"consumer_meta": meta,
-							"error":         ackErr,
-						}).Error("failed to ack the message")
+							"error":         nackErr,
+						}).Error("failed to nack the message")
 					}
+				}
+				continue
+			}
+
+			retryCount := extractHeaderInt(receivedMsg.Headers, headerKey.RetryCount)
+			if retryCount > r.option.MaxRetryFailedMessage {
+				logrus.WithFields(logrus.Fields{
+					"consumer_meta": meta,
+					"message_id":    msg.ID,
+					"topic":         msg.Topic,
+					"action":        msg.Action,
+					"timestamp":     msg.Timestamp,
+				}).Error("max retry failed message reached, moving message to dead letter queue")
+				err = receivedMsg.Nack(false, false)
+				if err != nil {
+					logrus.WithFields(logrus.Fields{
+						"consumer_meta": meta,
+						"error":         err,
+					}).Error("failed to nack the message")
 				}
 				continue
 			}
 
 			m := goqueue.InboundMessage{
 				Message:    msg,
-				RetryCount: extractHeaderInt(receivedMsg.Headers, headerKey.RetryCount),
+				RetryCount: retryCount,
 				Metadata: map[string]interface{}{
 					"app-id":           receivedMsg.AppId,
 					"consumer-tag":     receivedMsg.ConsumerTag,
@@ -166,38 +223,7 @@ func (r *rabbitMQ) Consume(ctx context.Context,
 					err = receivedMsg.Nack(false, false)
 					return
 				},
-				PutToBackOfQueueWithDelay: func(ctx context.Context, delayFn goqueue.DelayFn) (err error) {
-					if delayFn == nil {
-						delayFn = goqueue.DefaultDelayFn
-					}
-					retries := extractHeaderInt(receivedMsg.Headers, headerKey.RetryCount)
-					retries++
-					go func() {
-						delay := delayFn(retries)
-						time.Sleep(time.Duration(delay) * time.Second)
-						headers := receivedMsg.Headers
-						headers[string(headerKey.RetryCount)] = retries
-						requeueErr := r.requeueChannel.PublishWithContext(
-							ctx,
-							receivedMsg.Exchange,
-							receivedMsg.RoutingKey,
-							false,
-							false,
-							amqp.Publishing{
-								Headers:     headers,
-								ContentType: receivedMsg.ContentType,
-								Body:        receivedMsg.Body,
-								Timestamp:   time.Now(),
-								AppId:       r.tagName,
-							},
-						)
-						if err != nil {
-							logrus.Error("failed to requeue the message, got err: ", requeueErr)
-						}
-					}()
-					err = receivedMsg.Ack(false)
-					return
-				},
+				PutToBackOfQueueWithDelay: r.requeueMessage(meta, receivedMsg),
 			}
 
 			logrus.WithFields(logrus.Fields{
@@ -262,6 +288,61 @@ func buildMessage(consumerMeta map[string]interface{}, receivedMsg amqp.Delivery
 
 	msg.SetSchemaVersion(extractHeaderString(receivedMsg.Headers, headerKey.SchemaVer))
 	return msg, nil
+}
+
+func (r *rabbitMQ) requeueMessage(consumerMeta map[string]interface{}, receivedMsg amqp.Delivery) func(ctx context.Context, delayFn goqueue.DelayFn) (err error) {
+	return func(ctx context.Context, delayFn goqueue.DelayFn) (err error) {
+		if delayFn == nil {
+			delayFn = goqueue.DefaultDelayFn
+		}
+		retries := extractHeaderInt(receivedMsg.Headers, headerKey.RetryCount)
+		retries++
+		delay := delayFn(retries)
+		time.Sleep(time.Duration(delay) * time.Second)
+		headers := receivedMsg.Headers
+		headers[string(headerKey.RetryCount)] = retries
+		requeueErr := r.requeueChannel.PublishWithContext(
+			ctx,
+			receivedMsg.Exchange,
+			receivedMsg.RoutingKey,
+			false,
+			false,
+			amqp.Publishing{
+				Headers:     headers,
+				ContentType: receivedMsg.ContentType,
+				Body:        receivedMsg.Body,
+				Timestamp:   time.Now(),
+				AppId:       r.tagName,
+			},
+		)
+		if requeueErr != nil {
+			logrus.WithFields(logrus.Fields{
+				"consumer_meta": consumerMeta,
+				"error":         requeueErr,
+			}).Error("failed to requeue the message")
+			err = receivedMsg.Nack(false, false) // move to DLQ instead (depend on the RMQ server configuration)
+			if err != nil {
+				logrus.WithFields(logrus.Fields{
+					"consumer_meta": consumerMeta,
+					"error":         err,
+				}).Error("failed to nack the message")
+				return err
+			}
+			return requeueErr
+		}
+
+		// requeed successfully
+		// ack the message
+		err = receivedMsg.Ack(false)
+		if err != nil {
+			logrus.WithFields(logrus.Fields{
+				"consumer_meta": consumerMeta,
+				"error":         err,
+			}).Error("failed to ack the message")
+			return err
+		}
+		return nil
+	}
 }
 
 func extractHeaderString(headers amqp.Table, key string) string {

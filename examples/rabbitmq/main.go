@@ -1,30 +1,3 @@
-# goqueue
-
-GoQueue - one library to rule them all. A golang wrapper that handles all the complexity of every Queue platforms. Extensible and easy to learn
-
-## Index
-
-- [Support](#support)
-- [Getting Started](#getting-started)
-- [Example](#example)
-- [Contribution](#contribution)
-
-## Support
-
-You can file an [Issue](https://github.com/bxcodec/goqueue/issues/new).
-See documentation in [Go.Dev](https://pkg.go.dev/github.com/bxcodec/goqueue?tab=doc)
-
-## Getting Started
-
-#### Install
-
-```shell
-go get -u github.com/bxcodec/goqueue
-```
-
-# Example
-
-```go
 package main
 
 import (
@@ -138,11 +111,3 @@ func handler() goqueue.InboundMessageHandlerFunc {
 		return m.Ack(ctx)
 	}
 }
-
-```
-
-## Contribution
-
----
-
-To contrib to this project, you can open a PR or an issue.

@@ -20,7 +20,6 @@ import (
 
 // rabbitMQ is the subscriber handler for rabbitmq
 type rabbitMQ struct {
-	client          *amqp.Connection
 	consumerChannel *amqp.Channel
 	requeueChannel  *amqp.Channel //if want requeue support to another queue
 	option          *consumer.Option
@@ -38,7 +37,6 @@ var defaultOption = func() *consumer.Option {
 
 // New will initialize the rabbitMQ subscriber
 func NewConsumer(
-	client *amqp.Connection,
 	consumerChannel *amqp.Channel,
 	requeueChannel *amqp.Channel,
 	opts ...consumer.OptionFunc) goqueue.Consumer {
@@ -46,13 +44,13 @@ func NewConsumer(
 	for _, o := range opts {
 		o(opt)
 	}
+
 	rmqHandler := &rabbitMQ{
-		client:          client,
 		consumerChannel: consumerChannel,
 		requeueChannel:  requeueChannel,
 		option:          opt,
 	}
-	if len(opt.ActionsPatternSubscribed) > 0 {
+	if len(opt.ActionsPatternSubscribed) > 0 && opt.TopicName != "" {
 		rmqHandler.initQueue()
 	}
 	rmqHandler.initConsumer()
@@ -99,6 +97,10 @@ func (r *rabbitMQ) initQueue() {
 // If an error occurs during the initialization, it logs the error and exits the program.
 func (r *rabbitMQ) initConsumer() {
 	r.tagName = fmt.Sprintf("%s-%s", r.option.QueueName, uuid.New().String())
+	if r.option.ConsumerID != "" {
+		r.tagName = r.option.ConsumerID
+	}
+
 	err := r.consumerChannel.Qos(r.option.BatchMessageSize, 0, false)
 	if err != nil {
 		logrus.Fatal("error when setting the prefetch count, ", err)

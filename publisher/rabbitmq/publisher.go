@@ -99,7 +99,7 @@ func (r *rabbitMQ) buildPublisher() goqueue.PublisherFunc {
 		m.ServiceAgent = headerVal.RabbitMQ
 		m.Timestamp = timestamp
 		m.ID = id
-		encoder, ok := goqueue.GetGoquEncoding(m.ContentType)
+		encoder, ok := goqueue.GetGoQueueEncoding(m.ContentType)
 		if !ok {
 			encoder = goqueue.DefaultEncoding
 		}

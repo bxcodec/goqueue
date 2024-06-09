@@ -3,6 +3,8 @@ package goqueue
 import "context"
 
 // Consumer represents an entity that consumes messages from a queue.
+//
+//go:generate mockery --name Consumer
 type Consumer interface {
 	// Consume consumes messages from the queue and passes them to the provided handler.
 	// It takes a context, an InboundMessageHandler, and a map of metadata as parameters.
@@ -14,6 +16,7 @@ type Consumer interface {
 	Stop(ctx context.Context) (err error)
 }
 
+//go:generate mockery --name InboundMessageHandler
 type InboundMessageHandler interface {
 	HandleMessage(ctx context.Context, m InboundMessage) (err error)
 }

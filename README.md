@@ -66,7 +66,8 @@ func main() {
 		publisher.WithPublisherID("publisher_id"),
 		publisher.WithMiddlewares(
 			middleware.HelloWorldMiddlewareExecuteBeforePublisher(),
-			middleware.HelloWorldMiddlewareExecuteAfterPublisher()),
+			middleware.HelloWorldMiddlewareExecuteAfterPublisher(),
+		),
 	)
 
 	publisherChannel, err := rmqConn.Channel()
@@ -88,7 +89,8 @@ func main() {
 		consumerChannel,
 		consumer.WithMiddlewares(
 			middleware.HelloWorldMiddlewareExecuteAfterInboundMessageHandler(),
-			middleware.HelloWorldMiddlewareExecuteBeforeInboundMessageHandler()),
+			middleware.HelloWorldMiddlewareExecuteBeforeInboundMessageHandler(),
+		),
 		consumer.WithQueueName("consumer_queue"),
 		consumer.WithConsumerID("consumer_id"),
 		consumer.WithBatchMessageSize(1),
@@ -138,7 +140,6 @@ func handler() goqueue.InboundMessageHandlerFunc {
 		return m.Ack(ctx)
 	}
 }
-
 ```
 
 ## Contribution

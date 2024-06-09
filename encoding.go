@@ -33,23 +33,23 @@ var (
 )
 
 var (
-	// GoQueueEncodingMap is a concurrent-safe map used for encoding in GoQueue.
-	GoQueueEncodingMap = sync.Map{}
+	// goQueueEncodingMap is a concurrent-safe map used for encoding in GoQueue.
+	goQueueEncodingMap = sync.Map{}
 )
 
-// AddGoQueueEncoding stores the given encoding for the specified content type in the GoQueueEncodingMap.
-// The GoQueueEncodingMap is a concurrent-safe map that maps content types to encodings.
+// AddGoQueueEncoding stores the given encoding for the specified content type in the goQueueEncodingMap.
+// The goQueueEncodingMap is a concurrent-safe map that maps content types to encodings.
 // The content type is specified by the `contentType` parameter, and the encoding is specified by the `encoding` parameter.
 // This function is typically used to register custom encodings for specific content types in the GoQueue library.
 func AddGoQueueEncoding(contentType headerVal.ContentType, encoding *Encoding) {
-	GoQueueEncodingMap.Store(contentType, encoding)
+	goQueueEncodingMap.Store(contentType, encoding)
 }
 
 // GetGoQueueEncoding returns the encoding associated with the given content type.
-// It looks up the encoding in the GoQueueEncodingMap and returns it along with a boolean value indicating if the encoding was found.
+// It looks up the encoding in the goQueueEncodingMap and returns it along with a boolean value indicating if the encoding was found.
 // If the encoding is not found, it returns nil and false.
 func GetGoQueueEncoding(contentType headerVal.ContentType) (res *Encoding, ok bool) {
-	if encoding, ok := GoQueueEncodingMap.Load(contentType); ok {
+	if encoding, ok := goQueueEncodingMap.Load(contentType); ok {
 		return encoding.(*Encoding), ok
 	}
 	return nil, false

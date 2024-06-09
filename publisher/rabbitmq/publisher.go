@@ -50,11 +50,6 @@ func (r *rabbitMQ) Publish(ctx context.Context, m goqueue.Message) (err error) {
 
 func (r *rabbitMQ) buildPublisher() goqueue.PublisherFunc {
 	return func(ctx context.Context, m goqueue.Message) (err error) {
-		data, err := goqueue.GetGoquEncoding(m.ContentType).Encode(ctx, m)
-		if err != nil {
-			return err
-		}
-
 		id := m.ID
 		if id == "" {
 			id = uuid.New().String()
@@ -80,6 +75,16 @@ func (r *rabbitMQ) buildPublisher() goqueue.PublisherFunc {
 		}
 		for key, value := range m.Headers {
 			headers[key] = value
+		}
+
+		m.Headers = headers
+		m.ServiceAgent = headerVal.RabbitMQ
+		m.ContentType = headerVal.ContentType(m.ContentType)
+		m.Timestamp = timestamp
+		m.ID = id
+		data, err := goqueue.GetGoquEncoding(m.ContentType).Encode(ctx, m)
+		if err != nil {
+			return err
 		}
 
 		return r.publisherChannel.PublishWithContext(

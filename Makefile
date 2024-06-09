@@ -28,11 +28,19 @@ TESTS_ARGS += -test.coverprofile   coverage.out
 TESTS_ARGS += -test.timeout        60s
 TESTS_ARGS += -race
 run-tests: $(GOTESTSUM)
-	@ gotestsum $(TESTS_ARGS) -short
+	@gotestsum $(TESTS_ARGS) -short
 
 test: run-tests $(TPARSE) ## Run Tests & parse details
 	@cat gotestsum.json.out | $(TPARSE) -all -notests
+docker-test:
+	@docker-compose -f test.compose.yaml up -d --build 
 
+integration-test: docker-test
+	@echo "Running Integration Tests"
+	@gotestsum $(TESTS_ARGS)
+	@cat gotestsum.json.out | $(TPARSE) -all -notests
+docker-clean:
+	@docker-compose -f test.compose.yaml down
 
 lint: $(GOLANGCI) ## Runs golangci-lint with predefined configuration
 	@echo "Applying linter"

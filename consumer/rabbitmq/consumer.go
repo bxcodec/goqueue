@@ -2,6 +2,7 @@ package rabbitmq
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 
 	"github.com/bxcodec/goqueue"
 	"github.com/bxcodec/goqueue/consumer"
+	"github.com/bxcodec/goqueue/errors"
 	headerKey "github.com/bxcodec/goqueue/headers/key"
 	headerVal "github.com/bxcodec/goqueue/headers/value"
 	"github.com/bxcodec/goqueue/middleware"
@@ -115,19 +117,22 @@ func (r *rabbitMQ) Consume(ctx context.Context,
 			}).Info("stopping the worker")
 			return
 		case receivedMsg := <-r.msgReceiver:
-			msg := &goqueue.Message{
-				ID:           extractHeaderString(receivedMsg.Headers, headerKey.AppID),
-				Timestamp:    extractHeaderTime(receivedMsg.Headers, headerKey.PublishedTimestamp),
-				Action:       receivedMsg.RoutingKey,
-				Topic:        receivedMsg.Exchange,
-				ContentType:  headerVal.ContentType(extractHeaderString(receivedMsg.Headers, headerKey.ContentType)),
-				Headers:      receivedMsg.Headers,
-				Data:         receivedMsg.Body,
-				ServiceAgent: headerVal.GoquServiceAgent(extractHeaderString(receivedMsg.Headers, headerKey.QueueServiceAgent)),
+			msg, err := buildMessage(meta, receivedMsg)
+			if err != nil {
+				if err == errors.ErrInvalidMessageFormat {
+					ackErr := receivedMsg.Ack(false)
+					if ackErr != nil {
+						logrus.WithFields(logrus.Fields{
+							"consumer_meta": meta,
+							"error":         ackErr,
+						}).Error("failed to ack the message")
+					}
+				}
+				continue
 			}
-			msg.SetSchemaVersion(extractHeaderString(receivedMsg.Headers, headerKey.SchemaVer))
+
 			m := goqueue.InboundMessage{
-				Message:    *msg,
+				Message:    msg,
 				RetryCount: extractHeaderInt(receivedMsg.Headers, headerKey.RetryCount),
 				Metadata: map[string]interface{}{
 					"app-id":           receivedMsg.AppId,
@@ -161,7 +166,7 @@ func (r *rabbitMQ) Consume(ctx context.Context,
 					err = receivedMsg.Nack(false, false)
 					return
 				},
-				Requeue: func(ctx context.Context, delayFn goqueue.DelayFn) (err error) {
+				PutToBackOfQueueWithDelay: func(ctx context.Context, delayFn goqueue.DelayFn) (err error) {
 					if delayFn == nil {
 						delayFn = goqueue.DefaultDelayFn
 					}
@@ -172,7 +177,7 @@ func (r *rabbitMQ) Consume(ctx context.Context,
 						time.Sleep(time.Duration(delay) * time.Second)
 						headers := receivedMsg.Headers
 						headers[string(headerKey.RetryCount)] = retries
-						requeueErr := r.requeueChannel.PublishWithContext( //nolint:staticcheck
+						requeueErr := r.requeueChannel.PublishWithContext(
 							ctx,
 							receivedMsg.Exchange,
 							receivedMsg.RoutingKey,
@@ -202,8 +207,9 @@ func (r *rabbitMQ) Consume(ctx context.Context,
 				"action":        msg.Action,
 				"timestamp":     msg.Timestamp,
 			}).Info("message received")
+
 			handleCtx := middleware.ApplyHandlerMiddleware(h.HandleMessage, r.option.Middlewares...)
-			err := handleCtx(ctx, m)
+			err = handleCtx(ctx, m)
 			if err != nil {
 				logrus.WithFields(logrus.Fields{
 					"consumer_meta": meta,
@@ -215,6 +221,47 @@ func (r *rabbitMQ) Consume(ctx context.Context,
 			}
 		}
 	}
+}
+
+func buildMessage(consumerMeta map[string]interface{}, receivedMsg amqp.Delivery) (msg goqueue.Message, err error) {
+	err = json.Unmarshal(receivedMsg.Body, &msg)
+	if err != nil {
+		logrus.Error("failed to unmarshal the message, got err: ", err)
+		logrus.WithFields(logrus.Fields{
+			"consumer_meta": consumerMeta,
+			"error":         err,
+		}).Error("failed to unmarshal the message, removing the message due to wrong message format")
+		return msg, errors.ErrInvalidMessageFormat
+	}
+
+	if msg.ID == "" {
+		msg.ID = extractHeaderString(receivedMsg.Headers, headerKey.AppID)
+	}
+	if msg.Timestamp.IsZero() {
+		msg.Timestamp = extractHeaderTime(receivedMsg.Headers, headerKey.PublishedTimestamp)
+	}
+	if msg.Action == "" {
+		msg.Action = receivedMsg.RoutingKey
+	}
+	if msg.Topic == "" {
+		msg.Topic = receivedMsg.Exchange
+	}
+	if msg.ContentType == "" {
+		msg.ContentType = headerVal.ContentType(extractHeaderString(receivedMsg.Headers, headerKey.ContentType))
+	}
+	if msg.Headers == nil {
+		msg.Headers = receivedMsg.Headers
+	}
+	if msg.Data == "" || msg.Data == nil {
+		logrus.WithFields(logrus.Fields{
+			"consumer_meta": consumerMeta,
+			"msg":           msg,
+		}).Error("message data is empty, removing the message due to wrong message format")
+		return msg, errors.ErrInvalidMessageFormat
+	}
+
+	msg.SetSchemaVersion(extractHeaderString(receivedMsg.Headers, headerKey.SchemaVer))
+	return msg, nil
 }
 
 func extractHeaderString(headers amqp.Table, key string) string {

@@ -1,0 +1,12 @@
+version: "3.7"
+services:
+  rabbitmq-test:
+    image: rabbitmq:3.13.3-management-alpine
+    container_name: "goqueue-rabbitmq-test"
+    hostname: rabbitmq
+    ports:
+      - "15671:15672"
+      - "5672:5672"
+    volumes:
+      - ./tests/localconf/rabbitmq/rabbitmq.definition.json:/opt/definitions.json:ro
+      - ./tests/localconf/rabbitmq/rabbitmq.config:/etc/rabbitmq/rabbitmq.config:ro

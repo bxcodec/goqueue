@@ -162,7 +162,7 @@ func (s *rabbitMQTestSuite) seedPublish(contentType string, action string) {
 func (s *rabbitMQTestSuite) TestConsumerWithoutExchangePatternProvided() {
 	s.initQueueForTesting(s.T(), "goqueue.action.#")
 	s.seedPublish(string(headerVal.ContentTypeJSON), testAction)
-	rmqSubs := rmq.NewConsumer(s.conn,
+	rmqSubs := rmq.NewConsumer(
 		s.consumerChannel,
 		s.publishChannel,
 		consumer.WithBatchMessageSize(1),
@@ -186,7 +186,7 @@ func (s *rabbitMQTestSuite) TestConsumerWithoutExchangePatternProvided() {
 func (s *rabbitMQTestSuite) TestConsumerWithExchangePatternProvided() {
 	s.seedPublish(string(headerVal.ContentTypeJSON), testAction)
 
-	rmqSubs := rmq.NewConsumer(s.conn,
+	rmqSubs := rmq.NewConsumer(
 		s.consumerChannel,
 		s.publishChannel,
 		consumer.WithBatchMessageSize(1),
@@ -234,7 +234,7 @@ func handler(t *testing.T, expected goqueue.Message) goqueue.InboundMessageHandl
 func (s *rabbitMQTestSuite) TestRequeueWithouthExchangePatternProvided() {
 	s.initQueueForTesting(s.T(), "goqueue.action.#")
 	s.seedPublish(string(headerVal.ContentTypeJSON), testActionRequeue)
-	rmqSubs := rmq.NewConsumer(s.conn,
+	rmqSubs := rmq.NewConsumer(
 		s.consumerChannel,
 		s.publishChannel,
 		consumer.WithBatchMessageSize(1),

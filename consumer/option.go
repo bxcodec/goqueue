@@ -18,6 +18,7 @@ type Option struct {
 	ActionsPatternSubscribed []string
 	TopicName                string
 	MaxRetryFailedMessage    int64
+	ConsumerID               string
 }
 
 // OptionFunc is a function type that takes an `opt` parameter of type `*Option`.
@@ -71,5 +72,12 @@ func WithTopicName(name string) OptionFunc {
 func WithMaxRetryFailedMessage(n int64) OptionFunc {
 	return func(opt *Option) {
 		opt.MaxRetryFailedMessage = n
+	}
+}
+
+// WithConsumerID sets the consumer ID for the consumer option.
+func WithConsumerID(id string) OptionFunc {
+	return func(opt *Option) {
+		opt.ConsumerID = id
 	}
 }

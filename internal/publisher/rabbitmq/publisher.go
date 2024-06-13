@@ -7,41 +7,34 @@ import (
 	"github.com/bxcodec/goqueue"
 	headerKey "github.com/bxcodec/goqueue/headers/key"
 	headerVal "github.com/bxcodec/goqueue/headers/value"
+	"github.com/bxcodec/goqueue/interfaces"
+	"github.com/bxcodec/goqueue/internal/publisher"
 	"github.com/bxcodec/goqueue/middleware"
-	"github.com/bxcodec/goqueue/publisher"
+	publisherOpts "github.com/bxcodec/goqueue/options/publisher"
 	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/sirupsen/logrus"
 )
 
 const (
-	DefaultChannelPoolSize        = 5
-	ExchangeType           string = "topic"
-	DefaultContentType     string = "application/json"
+	DefaultChannelPoolSize = 5
 )
 
 type rabbitMQ struct {
 	channelPool *ChannelPool
-	option      *publisher.Option
-}
-
-var defaultOption = func() *publisher.Option {
-	return &publisher.Option{
-		Middlewares: []goqueue.PublisherMiddlewareFunc{},
-		PublisherID: uuid.New().String(),
-	}
+	option      *publisherOpts.PublisherOption
 }
 
 func NewPublisher(
-	conn *amqp.Connection,
-	opts ...publisher.OptionFunc,
-) goqueue.Publisher {
-	opt := defaultOption()
+	opts ...publisherOpts.PublisherOptionFunc,
+) publisher.Publisher {
+	opt := publisherOpts.DefaultPublisherOption()
 	for _, o := range opts {
 		o(opt)
 	}
 
-	channelPool := NewChannelPool(conn, DefaultChannelPoolSize)
+	conn := opt.RabbitMQPublisherConfig.Conn
+	channelPool := NewChannelPool(conn, opt.RabbitMQPublisherConfig.PublisherChannelPoolSize)
 	ch, err := channelPool.Get()
 	if err != nil {
 		logrus.Fatal(err)
@@ -54,9 +47,9 @@ func NewPublisher(
 	}
 }
 
-func (r *rabbitMQ) Publish(ctx context.Context, m goqueue.Message) (err error) {
+func (r *rabbitMQ) Publish(ctx context.Context, m interfaces.Message) (err error) {
 	if m.ContentType == "" {
-		m.ContentType = publisher.DefaultContentType
+		m.ContentType = publisherOpts.DefaultContentType
 	}
 	publishFunc := middleware.ApplyPublisherMiddleware(
 		r.buildPublisher(),
@@ -65,8 +58,8 @@ func (r *rabbitMQ) Publish(ctx context.Context, m goqueue.Message) (err error) {
 	return publishFunc(ctx, m)
 }
 
-func (r *rabbitMQ) buildPublisher() goqueue.PublisherFunc {
-	return func(ctx context.Context, m goqueue.Message) (err error) {
+func (r *rabbitMQ) buildPublisher() interfaces.PublisherFunc {
+	return func(ctx context.Context, m interfaces.Message) (err error) {
 		id := m.ID
 		if id == "" {
 			id = uuid.New().String()

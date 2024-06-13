@@ -10,44 +10,35 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/sirupsen/logrus"
 
-	"github.com/bxcodec/goqueue"
-	"github.com/bxcodec/goqueue/consumer"
 	"github.com/bxcodec/goqueue/errors"
 	headerKey "github.com/bxcodec/goqueue/headers/key"
 	headerVal "github.com/bxcodec/goqueue/headers/value"
+	"github.com/bxcodec/goqueue/interfaces"
+	"github.com/bxcodec/goqueue/internal/consumer"
 	"github.com/bxcodec/goqueue/middleware"
+	consumerOpts "github.com/bxcodec/goqueue/options/consumer"
 )
 
 // rabbitMQ is the subscriber handler for rabbitmq
 type rabbitMQ struct {
 	consumerChannel *amqp.Channel
 	requeueChannel  *amqp.Channel //if want requeue support to another queue
-	option          *consumer.Option
+	option          *consumerOpts.ConsumerOption
 	tagName         string
 	msgReceiver     <-chan amqp.Delivery
 }
 
-var defaultOption = func() *consumer.Option {
-	return &consumer.Option{
-		Middlewares:           []goqueue.InboundMessageHandlerMiddlewareFunc{},
-		BatchMessageSize:      consumer.DefaultBatchMessageSize,
-		MaxRetryFailedMessage: consumer.DefaultMaxRetryFailedMessage,
-	}
-}
-
 // New will initialize the rabbitMQ subscriber
 func NewConsumer(
-	consumerChannel *amqp.Channel,
-	requeueChannel *amqp.Channel,
-	opts ...consumer.OptionFunc) goqueue.Consumer {
-	opt := defaultOption()
+	opts ...consumerOpts.ConsumerOptionFunc) consumer.Consumer {
+	opt := consumerOpts.DefaultConsumerOption()
 	for _, o := range opts {
 		o(opt)
 	}
 
 	rmqHandler := &rabbitMQ{
-		consumerChannel: consumerChannel,
-		requeueChannel:  requeueChannel,
+		consumerChannel: opt.RabbitMQConsumerConfig.ConsumerChannel,
+		requeueChannel:  opt.RabbitMQConsumerConfig.ReQueueChannel,
 		option:          opt,
 	}
 	if len(opt.ActionsPatternSubscribed) > 0 && opt.TopicName != "" {
@@ -141,7 +132,7 @@ func (r *rabbitMQ) initConsumer() {
 // If the context is canceled, the method stops consuming messages and returns.
 // The method returns an error if there was an issue consuming messages.
 func (r *rabbitMQ) Consume(ctx context.Context,
-	h goqueue.InboundMessageHandler,
+	h interfaces.InboundMessageHandler,
 	meta map[string]interface{}) (err error) {
 	logrus.WithFields(logrus.Fields{
 		"queue_name":    r.option.QueueName,
@@ -190,7 +181,7 @@ func (r *rabbitMQ) Consume(ctx context.Context,
 				continue
 			}
 
-			m := goqueue.InboundMessage{
+			m := interfaces.InboundMessage{
 				Message:    msg,
 				RetryCount: retryCount,
 				Metadata: map[string]interface{}{
@@ -251,7 +242,7 @@ func (r *rabbitMQ) Consume(ctx context.Context,
 	}
 }
 
-func buildMessage(consumerMeta map[string]interface{}, receivedMsg amqp.Delivery) (msg goqueue.Message, err error) {
+func buildMessage(consumerMeta map[string]interface{}, receivedMsg amqp.Delivery) (msg interfaces.Message, err error) {
 	err = json.Unmarshal(receivedMsg.Body, &msg)
 	if err != nil {
 		logrus.Error("failed to unmarshal the message, got err: ", err)
@@ -293,10 +284,10 @@ func buildMessage(consumerMeta map[string]interface{}, receivedMsg amqp.Delivery
 }
 
 func (r *rabbitMQ) requeueMessage(consumerMeta map[string]interface{},
-	receivedMsg amqp.Delivery) func(ctx context.Context, delayFn goqueue.DelayFn) (err error) {
-	return func(ctx context.Context, delayFn goqueue.DelayFn) (err error) {
+	receivedMsg amqp.Delivery) func(ctx context.Context, delayFn interfaces.DelayFn) (err error) {
+	return func(ctx context.Context, delayFn interfaces.DelayFn) (err error) {
 		if delayFn == nil {
-			delayFn = goqueue.DefaultDelayFn
+			delayFn = interfaces.DefaultDelayFn
 		}
 		retries := extractHeaderInt(receivedMsg.Headers, headerKey.RetryCount)
 		retries++

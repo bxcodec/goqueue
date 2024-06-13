@@ -6,24 +6,25 @@ import (
 	"sync"
 
 	headerVal "github.com/bxcodec/goqueue/headers/value"
+	"github.com/bxcodec/goqueue/interfaces"
 )
 
 // EncoderFn is a function type that encodes a message into a byte slice.
 // It takes a context and a message as input and returns the encoded data and an error (if any).
-type EncoderFn func(ctx context.Context, m Message) (data []byte, err error)
+type EncoderFn func(ctx context.Context, m interfaces.Message) (data []byte, err error)
 
 // DecoderFn is a function type that decodes a byte slice into a Message.
 // It takes a context and a byte slice as input and returns a Message and an error.
-type DecoderFn func(ctx context.Context, data []byte) (m Message, err error)
+type DecoderFn func(ctx context.Context, data []byte) (m interfaces.Message, err error)
 
 var (
 	// JSONEncoder is an implementation of the EncoderFn interface
 	// that encodes a Message into JSON format.
-	JSONEncoder EncoderFn = func(ctx context.Context, m Message) (data []byte, err error) {
+	JSONEncoder EncoderFn = func(ctx context.Context, m interfaces.Message) (data []byte, err error) {
 		return json.Marshal(m)
 	}
 	// JSONDecoder is a DecoderFn implementation that decodes JSON data into a Message.
-	JSONDecoder DecoderFn = func(ctx context.Context, data []byte) (m Message, err error) {
+	JSONDecoder DecoderFn = func(ctx context.Context, data []byte) (m interfaces.Message, err error) {
 		err = json.Unmarshal(data, &m)
 		return
 	}

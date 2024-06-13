@@ -7,6 +7,7 @@ import (
 
 	"github.com/bxcodec/goqueue/interfaces"
 	"github.com/bxcodec/goqueue/internal/consumer"
+	"github.com/bxcodec/goqueue/internal/publisher"
 	"github.com/bxcodec/goqueue/options"
 	"golang.org/x/sync/errgroup"
 )
@@ -15,7 +16,7 @@ import (
 type QueueService struct {
 	consumer         consumer.Consumer                // The consumer responsible for consuming messages from the queue.
 	handler          interfaces.InboundMessageHandler // The handler responsible for processing incoming messages.
-	publisher        interfaces.Publisher             // The publisher responsible for publishing messages to the queue.
+	publisher        publisher.Publisher              // The publisher responsible for publishing messages to the queue.
 	NumberOfConsumer int                              // The number of consumers to process messages concurrently.
 }
 

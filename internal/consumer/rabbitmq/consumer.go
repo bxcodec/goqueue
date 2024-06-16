@@ -41,9 +41,11 @@ func NewConsumer(
 		requeueChannel:  opt.RabbitMQConsumerConfig.ReQueueChannel,
 		option:          opt,
 	}
-	if len(opt.ActionsPatternSubscribed) > 0 && opt.TopicName != "" {
+	if opt.RabbitMQConsumerConfig.QueueDeclareConfig != nil &&
+		opt.RabbitMQConsumerConfig.QueueBindConfig != nil {
 		rmqHandler.initQueue()
 	}
+
 	rmqHandler.initConsumer()
 	return rmqHandler
 }
@@ -54,26 +56,25 @@ func (r *rabbitMQ) initQueue() {
 	// Returns an instance of amqp.Queue and any error encountered.
 	// Please refer to the RabbitMQ documentation for more information on the parameters.
 	// https://www.rabbitmq.com/amqp-0-9-1-reference.html#queue.declare
-	// (from bxcodec: please raise a PR if you need a custom queue argument)
 	_, err := r.consumerChannel.QueueDeclare(
 		r.option.QueueName,
-		true,
-		false,
-		false,
-		false,
-		nil,
+		r.option.RabbitMQConsumerConfig.QueueDeclareConfig.Durable,
+		r.option.RabbitMQConsumerConfig.QueueDeclareConfig.AutoDelete,
+		r.option.RabbitMQConsumerConfig.QueueDeclareConfig.Exclusive,
+		r.option.RabbitMQConsumerConfig.QueueDeclareConfig.NoWait,
+		r.option.RabbitMQConsumerConfig.QueueDeclareConfig.Args,
 	)
 	if err != nil {
 		logrus.Fatal("error declaring the queue, ", err)
 	}
 
-	for _, eventType := range r.option.ActionsPatternSubscribed {
+	for _, eventType := range r.option.RabbitMQConsumerConfig.QueueBindConfig.RoutingKeys {
 		err = r.consumerChannel.QueueBind(
 			r.option.QueueName,
 			eventType,
-			r.option.TopicName,
-			false,
-			nil,
+			r.option.RabbitMQConsumerConfig.QueueBindConfig.ExchangeName,
+			r.option.RabbitMQConsumerConfig.QueueBindConfig.NoWait,
+			r.option.RabbitMQConsumerConfig.QueueBindConfig.Args,
 		)
 		if err != nil {
 			logrus.Fatal("error binding the queue, ", err)

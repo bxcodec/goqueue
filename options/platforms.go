@@ -1,5 +1,6 @@
 package options
 
+// Platform represents a platform in the system.
 type Platform string
 
 const (

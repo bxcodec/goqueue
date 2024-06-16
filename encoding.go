@@ -72,3 +72,7 @@ var (
 	}
 	DefaultEncoding = JSONEncoding
 )
+
+func init() {
+	AddGoQueueEncoding(JSONEncoding.ContentType, JSONEncoding)
+}

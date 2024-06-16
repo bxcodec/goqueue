@@ -126,11 +126,20 @@ func (r *rabbitMQ) initConsumer() {
 	r.msgReceiver = receiver
 }
 
-// Consume consumes messages from a RabbitMQ queue.
-// It takes a context, an inbound message handler, and metadata as input parameters.
-// The method continuously listens for messages from the queue and handles them using the provided handler.
-// If the context is canceled, the method stops consuming messages and returns.
-// The method returns an error if there was an issue consuming messages.
+// Consume consumes messages from a RabbitMQ queue and handles them using the provided message handler.
+// It takes a context, an inbound message handler, and a map of metadata as input parameters.
+// The function continuously listens for messages from the queue and processes them until the context is canceled.
+// If the context is canceled, the function stops consuming messages and returns.
+// For each received message, the function builds an inbound message, extracts the retry count, and checks if the maximum retry count has been reached.
+// If the maximum retry count has been reached, the message is moved to the dead letter queue.
+// Otherwise, the message is passed to the message handler for processing.
+// The message handler is responsible for handling the message and returning an error if any.
+// If an error occurs while handling the message, it is logged.
+// The function provides methods for acknowledging, rejecting, and moving messages to the dead letter queue.
+// These methods can be used by the message handler to control the message processing flow.
+// The function also logs information about the received message, such as the message ID, topic, action, and timestamp.
+// It applies any configured middlewares to the message handler before calling it.
+// The function returns an error if any occurred during message handling or if the context was canceled.
 func (r *rabbitMQ) Consume(ctx context.Context,
 	h interfaces.InboundMessageHandler,
 	meta map[string]interface{}) (err error) {

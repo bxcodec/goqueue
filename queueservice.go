@@ -12,7 +12,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// QueueService represents a queue service that handles incoming messages.
+// QueueService represents a service that handles message queuing operations.
 type QueueService struct {
 	consumer         consumer.Consumer                // The consumer responsible for consuming messages from the queue.
 	handler          interfaces.InboundMessageHandler // The handler responsible for processing incoming messages.
@@ -21,7 +21,8 @@ type QueueService struct {
 }
 
 // NewQueueService creates a new instance of QueueService with the provided options.
-// It accepts zero or more OptionFunc functions to customize the behavior of the QueueService.
+// It accepts a variadic parameter `opts` which allows configuring the QueueService.
+// The options are applied in the order they are provided.
 // Returns a pointer to the created QueueService.
 func NewQueueService(opts ...options.GoQueueOptionFunc) *QueueService {
 	opt := options.DefaultGoQueueOption()
@@ -39,8 +40,6 @@ func NewQueueService(opts ...options.GoQueueOptionFunc) *QueueService {
 // Start starts the queue service by spawning multiple consumers to process messages.
 // It returns an error if the consumer or handler is not defined.
 // The method uses the provided context to manage the lifecycle of the consumers.
-// Each consumer is assigned a unique consumer ID and the start time is recorded in the meta data.
-// The method uses the errgroup package to manage the goroutines and waits for all consumers to finish.
 func (qs *QueueService) Start(ctx context.Context) (err error) {
 	if qs.consumer == nil {
 		return errors.New("consumer is not defined")
@@ -64,7 +63,7 @@ func (qs *QueueService) Start(ctx context.Context) (err error) {
 }
 
 // Stop stops the queue service by stopping the consumer and closing the publisher.
-// It returns an error if there is an issue stopping the consumer or closing the publisher.
+// It returns an error if there was an issue stopping the consumer or closing the publisher.
 func (qs *QueueService) Stop(ctx context.Context) error {
 	if qs.consumer == nil {
 		return errors.New("consumer is not defined")
@@ -81,7 +80,7 @@ func (qs *QueueService) Stop(ctx context.Context) error {
 	return nil
 }
 
-// Publish sends a message to the queue using the defined publisher.
+// Publish publishes a message to the queue.
 // It returns an error if the publisher is not defined or if there was an error while publishing the message.
 func (qs *QueueService) Publish(ctx context.Context, m interfaces.Message) (err error) {
 	if qs.publisher == nil {

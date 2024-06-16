@@ -8,6 +8,8 @@ import (
 	"go.uber.org/multierr"
 )
 
+// ChannelPool represents a pool of AMQP channels used for publishing messages.
+// It provides a way to manage and reuse AMQP channels efficiently.
 type ChannelPool struct {
 	conn    *amqp.Connection
 	mutex   sync.Mutex
@@ -15,6 +17,9 @@ type ChannelPool struct {
 	maxSize int
 }
 
+// NewChannelPool creates a new ChannelPool instance.
+// It takes an AMQP connection and the maximum size of the pool as parameters.
+// It returns a pointer to the newly created ChannelPool.
 func NewChannelPool(conn *amqp.Connection, maxSize int) *ChannelPool {
 	return &ChannelPool{
 		conn:    conn,
@@ -23,6 +28,8 @@ func NewChannelPool(conn *amqp.Connection, maxSize int) *ChannelPool {
 	}
 }
 
+// Get returns a channel from the pool. If there are available channels in the pool, it returns one of them.
+// Otherwise, it creates a new channel from the underlying connection and returns it.
 func (cp *ChannelPool) Get() (*amqp.Channel, error) {
 	cp.mutex.Lock()
 	defer cp.mutex.Unlock()
@@ -35,6 +42,8 @@ func (cp *ChannelPool) Get() (*amqp.Channel, error) {
 	}
 }
 
+// Return returns a channel back to the channel pool.
+// If the pool is full, the channel is closed.
 func (cp *ChannelPool) Return(ch *amqp.Channel) {
 	cp.mutex.Lock()
 	defer cp.mutex.Unlock()
@@ -51,6 +60,8 @@ func (cp *ChannelPool) Return(ch *amqp.Channel) {
 	}
 }
 
+// Close closes the ChannelPool and all its associated channels.
+// It returns an error if there was an error closing any of the channels.
 func (cp *ChannelPool) Close() (err error) {
 	cp.mutex.Lock()
 	defer cp.mutex.Unlock()

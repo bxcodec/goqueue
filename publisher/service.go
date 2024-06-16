@@ -7,6 +7,9 @@ import (
 	publisherOpts "github.com/bxcodec/goqueue/options/publisher"
 )
 
+// NewPublisher creates a new publisher based on the specified platform.
+// It accepts the platform type and optional publisher options.
+// Returns the corresponding publisher implementation based on the platform.
 func NewPublisher(platform options.Platform, opts ...publisherOpts.PublisherOptionFunc) publisher.Publisher {
 	switch platform {
 	case publisherOpts.PublisherPlatformRabbitMQ:

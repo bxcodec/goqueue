@@ -92,10 +92,12 @@ func main() {
 	defer consumerChannel.Close()
 	rmqConsumer := consumer.NewConsumer(
 		consumerOpts.ConsumerPlatformRabbitMQ,
-		consumerOpts.WithRabbitMQConsumerConfig(&consumerOpts.RabbitMQConsumerConfig{
-			ConsumerChannel: consumerChannel,
-			ReQueueChannel:  publisherChannel,
-		}),
+		consumerOpts.WithRabbitMQConsumerConfig(consumerOpts.RabbitMQConfigWithDefaultTopicFanOutPattern(
+			consumerChannel,
+			publisherChannel,
+			"goqueue",                      // exchange name
+			[]string{"goqueue.payments.#"}, // routing keys pattern
+		)),
 		consumerOpts.WithConsumerID("consumer_id"),
 		consumerOpts.WithMiddlewares(
 			middleware.HelloWorldMiddlewareExecuteAfterInboundMessageHandler(),
@@ -103,8 +105,6 @@ func main() {
 		),
 		consumerOpts.WithMaxRetryFailedMessage(3),
 		consumerOpts.WithBatchMessageSize(1),
-		consumerOpts.WithActionsPatternSubscribed("goqueue.payments.#", "goqueue.users.#"),
-		consumerOpts.WithTopicName("goqueue"),
 		consumerOpts.WithQueueName("consumer_queue"),
 	)
 

@@ -192,15 +192,15 @@ func (s *rabbitMQTestSuite) TestConsumerWithoutExchangePatternProvided() {
 func (s *rabbitMQTestSuite) TestConsumerWithExchangePatternProvided() {
 	s.seedPublish(string(headerVal.ContentTypeJSON), testAction)
 	rmqSubs := rmq.NewConsumer(
-		consumerOpts.WithRabbitMQConsumerConfig(&consumerOpts.RabbitMQConsumerConfig{
-			ConsumerChannel: s.consumerChannel,
-			ReQueueChannel:  s.publishChannel,
-		}),
+		consumerOpts.WithRabbitMQConsumerConfig(consumerOpts.RabbitMQConfigWithDefaultTopicFanOutPattern(
+			s.consumerChannel,
+			s.publishChannel,
+			testExchange,
+			[]string{"goqueue.action.#"},
+		)),
 		consumerOpts.WithBatchMessageSize(1),
 		consumerOpts.WithMiddlewares(middleware.HelloWorldMiddlewareExecuteAfterInboundMessageHandler()),
 		consumerOpts.WithQueueName(rabbitMQTestQueueName),
-		consumerOpts.WithActionsPatternSubscribed("goqueue.action.#"), //exchange pattern provided in constructor
-		consumerOpts.WithTopicName(testExchange),                      //exchange name provided in constructor
 	)
 
 	msgHandler := handler(s.T(), s.getMockData(testAction))

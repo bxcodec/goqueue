@@ -37,10 +37,12 @@ import (
 
 	"github.com/bxcodec/goqueue"
 	"github.com/bxcodec/goqueue/consumer"
-	rmqConsumer "github.com/bxcodec/goqueue/consumer/rabbitmq"
+	"github.com/bxcodec/goqueue/interfaces"
 	"github.com/bxcodec/goqueue/middleware"
+	"github.com/bxcodec/goqueue/options"
+	consumerOpts "github.com/bxcodec/goqueue/options/consumer"
+	publisherOpts "github.com/bxcodec/goqueue/options/publisher"
 	"github.com/bxcodec/goqueue/publisher"
-	rmqPublisher "github.com/bxcodec/goqueue/publisher/rabbitmq"
 )
 
 func initExchange(ch *amqp.Channel, exchangeName string) error {
@@ -62,9 +64,14 @@ func main() {
 		panic(err)
 	}
 
-	rmqPub := rmqPublisher.NewPublisher(rmqConn,
-		publisher.WithPublisherID("publisher_id"),
-		publisher.WithMiddlewares(
+	rmqPub := publisher.NewPublisher(
+		publisherOpts.PublisherPlatformRabbitMQ,
+		publisherOpts.WithRabbitMQPublisherConfig(&publisherOpts.RabbitMQPublisherConfig{
+			Conn:                     rmqConn,
+			PublisherChannelPoolSize: 5,
+		}),
+		publisherOpts.WithPublisherID("publisher_id"),
+		publisherOpts.WithMiddlewares(
 			middleware.HelloWorldMiddlewareExecuteBeforePublisher(),
 			middleware.HelloWorldMiddlewareExecuteAfterPublisher(),
 		),
@@ -83,35 +90,36 @@ func main() {
 		panic(err)
 	}
 	defer consumerChannel.Close()
-
-	rmqConsumer := rmqConsumer.NewConsumer(
-		publisherChannel,
-		consumerChannel,
-		consumer.WithMiddlewares(
+	rmqConsumer := consumer.NewConsumer(
+		consumerOpts.ConsumerPlatformRabbitMQ,
+		consumerOpts.WithRabbitMQConsumerConfig(&consumerOpts.RabbitMQConsumerConfig{
+			ConsumerChannel: consumerChannel,
+			ReQueueChannel:  publisherChannel,
+		}),
+		consumerOpts.WithConsumerID("consumer_id"),
+		consumerOpts.WithMiddlewares(
 			middleware.HelloWorldMiddlewareExecuteAfterInboundMessageHandler(),
 			middleware.HelloWorldMiddlewareExecuteBeforeInboundMessageHandler(),
 		),
-		consumer.WithQueueName("consumer_queue"),
-		consumer.WithConsumerID("consumer_id"),
-		consumer.WithBatchMessageSize(1),
-		consumer.WithMaxRetryFailedMessage(3),
-		consumer.WithActionsPatternSubscribed("goqueue.payments.#", "goqueue.users.#"),
-		consumer.WithTopicName("goqueue"),
+		consumerOpts.WithMaxRetryFailedMessage(3),
+		consumerOpts.WithBatchMessageSize(1),
+		consumerOpts.WithActionsPatternSubscribed("goqueue.payments.#", "goqueue.users.#"),
+		consumerOpts.WithTopicName("goqueue"),
+		consumerOpts.WithQueueName("consumer_queue"),
 	)
 
 	queueSvc := goqueue.NewQueueService(
-		goqueue.WithPublisher(rmqPub),
-		goqueue.WithConsumer(rmqConsumer),
-		goqueue.WithMessageHandler(handler()),
+		options.WithConsumer(rmqConsumer),
+		options.WithPublisher(rmqPub),
+		options.WithMessageHandler(handler()),
 	)
-
 	go func() {
 		for i := 0; i < 10; i++ {
 			data := map[string]interface{}{
 				"message": fmt.Sprintf("Hello World %d", i),
 			}
 			jbyt, _ := json.Marshal(data)
-			err := queueSvc.Publish(context.Background(), goqueue.Message{
+			err := queueSvc.Publish(context.Background(), interfaces.Message{
 				Data:   data,
 				Action: "goqueue.payments.create",
 				Topic:  "goqueue",
@@ -132,14 +140,15 @@ func main() {
 	}
 }
 
-func handler() goqueue.InboundMessageHandlerFunc {
-	return func(ctx context.Context, m goqueue.InboundMessage) (err error) {
+func handler() interfaces.InboundMessageHandlerFunc {
+	return func(ctx context.Context, m interfaces.InboundMessage) (err error) {
 		data := m.Data
 		jbyt, _ := json.Marshal(data)
 		fmt.Println("Message Received: ", string(jbyt))
 		return m.Ack(ctx)
 	}
 }
+
 ```
 
 ## Contribution

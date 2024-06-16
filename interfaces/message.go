@@ -1,4 +1,4 @@
-package goqueue
+package interfaces
 
 import (
 	"time"

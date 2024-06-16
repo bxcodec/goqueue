@@ -8,11 +8,13 @@ import (
 	"time"
 
 	"github.com/bxcodec/goqueue"
-	"github.com/bxcodec/goqueue/consumer"
-	rmq "github.com/bxcodec/goqueue/consumer/rabbitmq"
 	headerKey "github.com/bxcodec/goqueue/headers/key"
 	headerVal "github.com/bxcodec/goqueue/headers/value"
+	"github.com/bxcodec/goqueue/interfaces"
+	rmq "github.com/bxcodec/goqueue/internal/consumer/rabbitmq"
 	"github.com/bxcodec/goqueue/middleware"
+	"github.com/bxcodec/goqueue/options"
+	consumerOpts "github.com/bxcodec/goqueue/options/consumer"
 	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/sirupsen/logrus"
@@ -121,8 +123,8 @@ func (s *rabbitMQTestSuite) initQueueForTesting(t *testing.T, exchangePattern ..
 	}
 }
 
-func (s *rabbitMQTestSuite) getMockData(action string) (res goqueue.Message) {
-	res = goqueue.Message{
+func (s *rabbitMQTestSuite) getMockData(action string) (res interfaces.Message) {
+	res = interfaces.Message{
 		Action: action,
 		Topic:  testExchange,
 		Data: map[string]interface{}{
@@ -163,17 +165,19 @@ func (s *rabbitMQTestSuite) TestConsumerWithoutExchangePatternProvided() {
 	s.initQueueForTesting(s.T(), "goqueue.action.#")
 	s.seedPublish(string(headerVal.ContentTypeJSON), testAction)
 	rmqSubs := rmq.NewConsumer(
-		s.consumerChannel,
-		s.publishChannel,
-		consumer.WithBatchMessageSize(1),
-		consumer.WithMiddlewares(middleware.HelloWorldMiddlewareExecuteAfterInboundMessageHandler()),
-		consumer.WithQueueName("testqueuesubscriber"),
+		consumerOpts.WithRabbitMQConsumerConfig(&consumerOpts.RabbitMQConsumerConfig{
+			ConsumerChannel: s.consumerChannel,
+			ReQueueChannel:  s.publishChannel,
+		}),
+		consumerOpts.WithBatchMessageSize(1),
+		consumerOpts.WithMiddlewares(middleware.HelloWorldMiddlewareExecuteAfterInboundMessageHandler()),
+		consumerOpts.WithQueueName(rabbitMQTestQueueName),
 	)
 
 	msgHandler := handler(s.T(), s.getMockData(testAction))
 	queueSvc := goqueue.NewQueueService(
-		goqueue.WithConsumer(rmqSubs),
-		goqueue.WithMessageHandler(msgHandler),
+		options.WithConsumer(rmqSubs),
+		options.WithMessageHandler(msgHandler),
 	)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3) // increase this context if want to test a long running worker
@@ -185,21 +189,22 @@ func (s *rabbitMQTestSuite) TestConsumerWithoutExchangePatternProvided() {
 
 func (s *rabbitMQTestSuite) TestConsumerWithExchangePatternProvided() {
 	s.seedPublish(string(headerVal.ContentTypeJSON), testAction)
-
 	rmqSubs := rmq.NewConsumer(
-		s.consumerChannel,
-		s.publishChannel,
-		consumer.WithBatchMessageSize(1),
-		consumer.WithMiddlewares(middleware.HelloWorldMiddlewareExecuteAfterInboundMessageHandler()),
-		consumer.WithQueueName(rabbitMQTestQueueName),
-		consumer.WithActionsPatternSubscribed("goqueue.action.#"), //exchange pattern provided in constructor
-		consumer.WithTopicName(testExchange),                      //exchange name provided in constructor
+		consumerOpts.WithRabbitMQConsumerConfig(&consumerOpts.RabbitMQConsumerConfig{
+			ConsumerChannel: s.consumerChannel,
+			ReQueueChannel:  s.publishChannel,
+		}),
+		consumerOpts.WithBatchMessageSize(1),
+		consumerOpts.WithMiddlewares(middleware.HelloWorldMiddlewareExecuteAfterInboundMessageHandler()),
+		consumerOpts.WithQueueName(rabbitMQTestQueueName),
+		consumerOpts.WithActionsPatternSubscribed("goqueue.action.#"), //exchange pattern provided in constructor
+		consumerOpts.WithTopicName(testExchange),                      //exchange name provided in constructor
 	)
 
 	msgHandler := handler(s.T(), s.getMockData(testAction))
 	queueSvc := goqueue.NewQueueService(
-		goqueue.WithConsumer(rmqSubs),
-		goqueue.WithMessageHandler(msgHandler),
+		options.WithConsumer(rmqSubs),
+		options.WithMessageHandler(msgHandler),
 	)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3) // increase this context if want to test a long running worker
@@ -209,8 +214,8 @@ func (s *rabbitMQTestSuite) TestConsumerWithExchangePatternProvided() {
 	s.Require().NoError(err)
 }
 
-func handler(t *testing.T, expected goqueue.Message) goqueue.InboundMessageHandlerFunc {
-	return func(ctx context.Context, m goqueue.InboundMessage) (err error) {
+func handler(t *testing.T, expected interfaces.Message) interfaces.InboundMessageHandlerFunc {
+	return func(ctx context.Context, m interfaces.InboundMessage) (err error) {
 		switch m.ContentType {
 		case headerVal.ContentTypeText:
 			assert.Equal(t, expected.Data, m.Data)
@@ -235,18 +240,21 @@ func (s *rabbitMQTestSuite) TestRequeueWithouthExchangePatternProvided() {
 	s.initQueueForTesting(s.T(), "goqueue.action.#")
 	s.seedPublish(string(headerVal.ContentTypeJSON), testActionRequeue)
 	rmqSubs := rmq.NewConsumer(
-		s.consumerChannel,
-		s.publishChannel,
-		consumer.WithBatchMessageSize(1),
-		consumer.WithMiddlewares(middleware.HelloWorldMiddlewareExecuteAfterInboundMessageHandler()),
-		consumer.WithQueueName(rabbitMQTestQueueName),
-		consumer.WithMaxRetryFailedMessage(2),
+
+		consumerOpts.WithRabbitMQConsumerConfig(&consumerOpts.RabbitMQConsumerConfig{
+			ConsumerChannel: s.consumerChannel,
+			ReQueueChannel:  s.publishChannel,
+		}),
+		consumerOpts.WithBatchMessageSize(1),
+		consumerOpts.WithMiddlewares(middleware.HelloWorldMiddlewareExecuteAfterInboundMessageHandler()),
+		consumerOpts.WithQueueName(rabbitMQTestQueueName),
+		consumerOpts.WithMaxRetryFailedMessage(2),
 	)
 
 	msgHandlerRequeue := handlerRequeue(s.T())
 	queueSvc := goqueue.NewQueueService(
-		goqueue.WithConsumer(rmqSubs),
-		goqueue.WithMessageHandler(msgHandlerRequeue),
+		options.WithConsumer(rmqSubs),
+		options.WithMessageHandler(msgHandlerRequeue),
 	)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5) // increase this context if want to test a long running worker
@@ -256,8 +264,8 @@ func (s *rabbitMQTestSuite) TestRequeueWithouthExchangePatternProvided() {
 	s.Require().NoError(err)
 }
 
-func handlerRequeue(t *testing.T) goqueue.InboundMessageHandlerFunc {
-	return func(ctx context.Context, m goqueue.InboundMessage) (err error) {
+func handlerRequeue(t *testing.T) interfaces.InboundMessageHandlerFunc {
+	return func(ctx context.Context, m interfaces.InboundMessage) (err error) {
 		delayFn := func(retries int64) int64 {
 			assert.Equal(t, int64(m.RetryCount)+1, retries) // because the retry++ is done before this delayfn is called
 			return m.RetryCount

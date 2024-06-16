@@ -11,8 +11,10 @@ import (
 	"github.com/bxcodec/goqueue"
 	headerKey "github.com/bxcodec/goqueue/headers/key"
 	headerVal "github.com/bxcodec/goqueue/headers/value"
-	"github.com/bxcodec/goqueue/publisher"
-	rmq "github.com/bxcodec/goqueue/publisher/rabbitmq"
+	"github.com/bxcodec/goqueue/interfaces"
+	rmq "github.com/bxcodec/goqueue/internal/publisher/rabbitmq"
+	"github.com/bxcodec/goqueue/options"
+	publisherOpts "github.com/bxcodec/goqueue/options/publisher"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
@@ -116,8 +118,8 @@ func (s *rabbitMQTestSuite) initQueueForTesting(t *testing.T, exchangePattern ..
 		require.NoError(t, err)
 	}
 }
-func (s *rabbitMQTestSuite) getMockData(action string, identifier string) (res goqueue.Message) {
-	res = goqueue.Message{
+func (s *rabbitMQTestSuite) getMockData(action string, identifier string) (res interfaces.Message) {
+	res = interfaces.Message{
 		Action:      action,
 		ID:          identifier,
 		Topic:       testExchange,
@@ -133,12 +135,16 @@ func (s *rabbitMQTestSuite) getMockData(action string, identifier string) (res g
 
 func (s *rabbitMQTestSuite) TestPublisher() {
 	s.initQueueForTesting(s.T(), testAction)
-	publisher := rmq.NewPublisher(s.conn,
-		publisher.WithPublisherID("test-publisher"),
+	publisher := rmq.NewPublisher(
+		publisherOpts.WithPublisherID("test-publisher"),
+		publisherOpts.WithRabbitMQPublisherConfig(&publisherOpts.RabbitMQPublisherConfig{
+			PublisherChannelPoolSize: 10,
+			Conn:                     s.conn,
+		}),
 	)
 
 	queueSvc := goqueue.NewQueueService(
-		goqueue.WithPublisher(publisher),
+		options.WithPublisher(publisher),
 	)
 	var err error
 	totalPublishedMessage := 10

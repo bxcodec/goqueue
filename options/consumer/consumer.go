@@ -12,18 +12,31 @@ const (
 )
 
 // ConsumerOption represents the configuration options for the consumer.
+// ConsumerOption represents the options for configuring a consumer.
 type ConsumerOption struct {
 	// BatchMessageSize specifies the maximum number of messages to be processed in a single batch.
 	BatchMessageSize int
+
 	// QueueName specifies the name of the queue to consume messages from.
 	QueueName string
+
 	// Middlewares is a list of middleware functions to be applied to the inbound message handler.
-	Middlewares              []interfaces.InboundMessageHandlerMiddlewareFunc
+	Middlewares []interfaces.InboundMessageHandlerMiddlewareFunc
+
+	// ActionsPatternSubscribed specifies the list of action patterns that the consumer is subscribed to.
 	ActionsPatternSubscribed []string
-	TopicName                string
-	MaxRetryFailedMessage    int64
-	ConsumerID               string
-	RabbitMQConsumerConfig   *RabbitMQConsumerConfig // optional, only if using RabbitMQ
+
+	// TopicName specifies the name of the topic to consume messages from.
+	TopicName string
+
+	// MaxRetryFailedMessage specifies the maximum number of times a failed message should be retried.
+	MaxRetryFailedMessage int64
+
+	// ConsumerID specifies the unique identifier for the consumer.
+	ConsumerID string
+
+	// RabbitMQConsumerConfig specifies the configuration for RabbitMQ consumer (optional, only if using RabbitMQ).
+	RabbitMQConsumerConfig *RabbitMQConsumerConfig
 }
 
 // ConsumerOptionFunc is a function type that takes an `opt` parameter of type `*ConsumerOption`.
@@ -94,6 +107,7 @@ func WithRabbitMQConsumerConfig(rabbitMQOption *RabbitMQConsumerConfig) Consumer
 	}
 }
 
+// DefaultConsumerOption returns the default consumer option.
 var DefaultConsumerOption = func() *ConsumerOption {
 	return &ConsumerOption{
 		Middlewares:           []interfaces.InboundMessageHandlerMiddlewareFunc{},
@@ -102,9 +116,12 @@ var DefaultConsumerOption = func() *ConsumerOption {
 	}
 }
 
+// RabbitMQConsumerConfig represents the configuration for a RabbitMQ consumer.
 type RabbitMQConsumerConfig struct {
+	// ConsumerChannel is the channel used for consuming messages from RabbitMQ.
 	ConsumerChannel *amqp.Channel
-	ReQueueChannel  *amqp.Channel
+	// ReQueueChannel is the channel used for re-queuing messages in RabbitMQ.
+	ReQueueChannel *amqp.Channel
 }
 
 const (

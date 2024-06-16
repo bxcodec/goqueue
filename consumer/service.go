@@ -7,6 +7,9 @@ import (
 	consumerOpts "github.com/bxcodec/goqueue/options/consumer"
 )
 
+// NewConsumer creates a new consumer based on the specified platform.
+// It accepts a platform option and additional consumer option functions.
+// It returns a consumer.Consumer interface implementation.
 func NewConsumer(platform options.Platform, opts ...consumerOpts.ConsumerOptionFunc) consumer.Consumer {
 	switch platform {
 	case consumerOpts.ConsumerPlatformRabbitMQ:

@@ -25,6 +25,7 @@ go get -u github.com/bxcodec/goqueue
 # Example
 
 ```go
+package main
 
 import (
 	"context"

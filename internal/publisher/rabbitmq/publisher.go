@@ -2,7 +2,6 @@ package rabbitmq
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/bxcodec/goqueue"
@@ -123,7 +122,6 @@ func (r *rabbitMQ) buildPublisher() interfaces.PublisherFunc {
 		m.ServiceAgent = headerVal.RabbitMQ
 		m.Timestamp = timestamp
 		m.ID = id
-		fmt.Println(">> ENCODING", m.ContentType)
 		encoder, ok := goqueue.GetGoQueueEncoding(m.ContentType)
 		if !ok {
 			return errors.ErrEncodingFormatNotSupported

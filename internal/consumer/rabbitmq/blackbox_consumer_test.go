@@ -43,6 +43,8 @@ func TestSuiteRabbitMQConsumer(t *testing.T) {
 		t.Skip("Skip the Test Suite for RabbitMQ Consumer")
 	}
 
+	time.Sleep(5 * time.Second) // wait for the rabbitmq to be ready
+
 	rmqURL := os.Getenv("RABBITMQ_TEST_URL")
 	if rmqURL == "" {
 		rmqURL = "amqp://test:test@localhost:5672/test"

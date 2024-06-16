@@ -195,9 +195,8 @@ func (s *rabbitMQTestSuite) TestConsumerWithExchangePatternProvided() {
 		consumerOpts.WithRabbitMQConsumerConfig(consumerOpts.RabbitMQConfigWithDefaultTopicFanOutPattern(
 			s.consumerChannel,
 			s.publishChannel,
-			rabbitMQTestQueueName,
 			testExchange,
-			"goqueue.action.#",
+			[]string{"goqueue.action.#"},
 		)),
 		consumerOpts.WithBatchMessageSize(1),
 		consumerOpts.WithMiddlewares(middleware.HelloWorldMiddlewareExecuteAfterInboundMessageHandler()),

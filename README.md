@@ -159,7 +159,7 @@ func handler() interfaces.InboundMessageHandlerFunc {
 
 ### RabbitMQ -- Retry Concept
 
-![Goqueue Retry Architecture RabbitMQ](misc/images/goqueue-retry.png)
+![Goqueue Retry Architecture RabbitMQ](misc/images/rabbitmq-retry.png)
 Src: [Excalidraw Link](https://link.excalidraw.com/readonly/9sphJpzXzQIAVov3z8G7)
 
 ## Contribution

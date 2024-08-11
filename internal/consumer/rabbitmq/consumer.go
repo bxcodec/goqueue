@@ -132,6 +132,9 @@ func (r *rabbitMQ) initConsumer() {
 	r.msgReceiver = receiver
 }
 
+// initRetryModule initializes the retry module for the RabbitMQ consumer.
+// It declares the retry exchange, dead letter exchange, and retry queues.
+// It also binds the dead letter exchange to the original queue and the retry queues to the retry exchange.
 func (r *rabbitMQ) initRetryModule() {
 	// declare retry exchange
 	err := r.consumerChannel.ExchangeDeclare(
@@ -380,8 +383,6 @@ func (r *rabbitMQ) requeueMessageWithDLQ(consumerMeta map[string]interface{}, ms
 		retries++
 		delayInSeconds := delayFn(retries)
 		routingKeyPrefixForRetryQueue := getRetryRoutingKey(r.option.QueueName, retries)
-		//  it will publish to each retry queue with TTL is the delayInSeconds
-		// and there will n dead letter queues based on the limit of retries config
 		headers := receivedMsg.Headers
 		headers[headerKey.OriginalTopicName] = msg.Topic
 		headers[headerKey.OriginalActionName] = msg.Action
@@ -401,7 +402,7 @@ func (r *rabbitMQ) requeueMessageWithDLQ(consumerMeta map[string]interface{}, ms
 				Expiration:  fmt.Sprintf("%d", delayInSeconds*10000),
 			},
 		)
-		// time.Sleep(5 * time.Second)
+
 		if requeueErr != nil {
 			logrus.WithFields(logrus.Fields{
 				"consumer_meta": consumerMeta,

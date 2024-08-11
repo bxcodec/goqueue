@@ -166,11 +166,11 @@ const (
 //	the routing keys can be in pattern format.
 //	e.g. "a.*.b.#" will match "a.b", "a.c.b", "a.c.d.b", etc.
 //	For more information on pattern matching, see https://www.rabbitmq.com/tutorials/tutorial-five-go.html
-func RabbitMQConfigWithDefaultTopicFanOutPattern(consumerChannel, publisherChannel *amqp.Channel,
+func RabbitMQConfigWithDefaultTopicFanOutPattern(consumerChannel, requeueChannel *amqp.Channel,
 	exchangeName string, routingKeys []string) *RabbitMQConsumerConfig {
 	return &RabbitMQConsumerConfig{
 		ConsumerChannel: consumerChannel,
-		ReQueueChannel:  publisherChannel,
+		ReQueueChannel:  requeueChannel,
 		QueueDeclareConfig: &RabbitMQQueueDeclareConfig{
 			Durable:    true,
 			AutoDelete: false,

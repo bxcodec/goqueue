@@ -374,7 +374,8 @@ func buildMessage(consumerMeta map[string]interface{}, receivedMsg amqp.Delivery
 	return msg, nil
 }
 
-func (r *rabbitMQ) requeueMessageWithDLQ(consumerMeta map[string]interface{}, msg interfaces.Message, receivedMsg amqp.Delivery) func(ctx context.Context, delayFn interfaces.DelayFn) (err error) {
+func (r *rabbitMQ) requeueMessageWithDLQ(consumerMeta map[string]interface{}, msg interfaces.Message,
+	receivedMsg amqp.Delivery) func(ctx context.Context, delayFn interfaces.DelayFn) (err error) {
 	return func(ctx context.Context, delayFn interfaces.DelayFn) (err error) {
 		if delayFn == nil {
 			delayFn = interfaces.DefaultDelayFn

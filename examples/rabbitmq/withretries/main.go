@@ -116,6 +116,6 @@ func handler() interfaces.InboundMessageHandlerFunc {
 	return func(ctx context.Context, m interfaces.InboundMessage) (err error) {
 		fmt.Printf("Message: %+v\n", m)
 		// something happend, we need to requeue the message
-		return m.PutToBackOfQueueWithDelay(ctx, interfaces.ExponentialBackoffDelayFn)
+		return m.RetryWithDelayFn(ctx, interfaces.ExponentialBackoffDelayFn)
 	}
 }

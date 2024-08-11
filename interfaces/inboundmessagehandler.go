@@ -28,5 +28,5 @@ type InboundMessage struct {
 	// eg RabbitMQ: https://www.rabbitmq.com/docs/dlx
 	MoveToDeadLetterQueue func(ctx context.Context) (err error) `json:"-"`
 	// Requeue is used to put the message back to the tail of the queue after a delay.
-	PutToBackOfQueueWithDelay func(ctx context.Context, delayFn DelayFn) (err error) `json:"-"`
+	RetryWithDelayFn func(ctx context.Context, delayFn DelayFn) (err error) `json:"-"`
 }

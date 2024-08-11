@@ -22,7 +22,7 @@ import (
 // rabbitMQ is the subscriber handler for rabbitmq
 type rabbitMQ struct {
 	consumerChannel             *amqp.Channel
-	requeueChannel              *amqp.Channel //if want requeue support to another queue
+	requeueChannel              *amqp.Channel
 	option                      *consumerOpts.ConsumerOption
 	tagName                     string
 	msgReceiver                 <-chan amqp.Delivery
@@ -307,7 +307,7 @@ func (r *rabbitMQ) Consume(ctx context.Context,
 					err = receivedMsg.Nack(false, false)
 					return
 				},
-				PutToBackOfQueueWithDelay: r.requeueMessageWithDLQ(meta, msg, receivedMsg),
+				RetryWithDelayFn: r.requeueMessageWithDLQ(meta, msg, receivedMsg),
 			}
 
 			logrus.WithFields(logrus.Fields{

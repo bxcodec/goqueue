@@ -21,11 +21,13 @@ import (
 
 // rabbitMQ is the subscriber handler for rabbitmq
 type rabbitMQ struct {
-	consumerChannel *amqp.Channel
-	requeueChannel  *amqp.Channel //if want requeue support to another queue
-	option          *consumerOpts.ConsumerOption
-	tagName         string
-	msgReceiver     <-chan amqp.Delivery
+	consumerChannel             *amqp.Channel
+	requeueChannel              *amqp.Channel //if want requeue support to another queue
+	option                      *consumerOpts.ConsumerOption
+	tagName                     string
+	msgReceiver                 <-chan amqp.Delivery
+	retryExchangeName           string
+	retryDeadLetterExchangeName string
 }
 
 // New will initialize the rabbitMQ subscriber
@@ -37,9 +39,11 @@ func NewConsumer(
 	}
 
 	rmqHandler := &rabbitMQ{
-		consumerChannel: opt.RabbitMQConsumerConfig.ConsumerChannel,
-		requeueChannel:  opt.RabbitMQConsumerConfig.ReQueueChannel,
-		option:          opt,
+		consumerChannel:             opt.RabbitMQConsumerConfig.ConsumerChannel,
+		requeueChannel:              opt.RabbitMQConsumerConfig.ReQueueChannel,
+		option:                      opt,
+		retryExchangeName:           fmt.Sprintf("%s__retry_exchange", opt.QueueName),
+		retryDeadLetterExchangeName: fmt.Sprintf("%s__retry_dlx", opt.QueueName),
 	}
 	if opt.RabbitMQConsumerConfig.QueueDeclareConfig != nil &&
 		opt.RabbitMQConsumerConfig.QueueBindConfig != nil {
@@ -47,6 +51,7 @@ func NewConsumer(
 	}
 
 	rmqHandler.initConsumer()
+	rmqHandler.initRetryModule()
 	return rmqHandler
 }
 
@@ -127,6 +132,80 @@ func (r *rabbitMQ) initConsumer() {
 	r.msgReceiver = receiver
 }
 
+func (r *rabbitMQ) initRetryModule() {
+	// declare retry exchange
+	err := r.consumerChannel.ExchangeDeclare(
+		r.retryExchangeName,
+		"topic",
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
+
+	if err != nil {
+		logrus.Fatal("error declaring the retry exchange, ", err)
+	}
+
+	// declare dead letter exchange
+	err = r.consumerChannel.ExchangeDeclare(
+		r.retryDeadLetterExchangeName,
+		"fanout",
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
+
+	if err != nil {
+		logrus.Fatal("error declaring the retry dead letter exchange, ", err)
+	}
+
+	// bind dead letter exchange to original queue
+	err = r.consumerChannel.QueueBind(
+		r.option.QueueName,
+		"",
+		r.retryDeadLetterExchangeName,
+		false,
+		nil,
+	)
+	if err != nil {
+		logrus.Fatal("error binding the dead letter exchange to the original queue, ", err)
+	}
+
+	// declare retry queue
+	for i := int64(1); i <= r.option.MaxRetryFailedMessage; i++ {
+		// declare retry queue
+		_, err = r.consumerChannel.QueueDeclare(
+			getRetryRoutingKey(r.option.QueueName, i), // queue name and routing key is the same for retry queue
+			true,
+			false,
+			false,
+			false,
+			amqp.Table{
+				"x-dead-letter-exchange": r.retryDeadLetterExchangeName,
+			},
+		)
+		if err != nil {
+			logrus.Fatal("error declaring the retry queue, ", err)
+		}
+
+		// bind retry queue to retry exchange
+		err = r.consumerChannel.QueueBind(
+			getRetryRoutingKey(r.option.QueueName, i), // queue name and routing key is the same for retry queue
+			getRetryRoutingKey(r.option.QueueName, i), // queue name and routing key is the same for retry queue
+			r.retryExchangeName,
+			false,
+			nil,
+		)
+		if err != nil {
+			logrus.Fatal("error binding the retry queue, ", err)
+		}
+	}
+}
+
 // Consume consumes messages from a RabbitMQ queue and handles them using the provided message handler.
 // It takes a context, an inbound message handler, and a map of metadata as input parameters.
 // The function continuously listens for messages from the queue and processes them until the context is canceled.
@@ -190,7 +269,6 @@ func (r *rabbitMQ) Consume(ctx context.Context,
 				}
 				continue
 			}
-
 			m := interfaces.InboundMessage{
 				Message:    msg,
 				RetryCount: retryCount,
@@ -215,18 +293,18 @@ func (r *rabbitMQ) Consume(ctx context.Context,
 					return
 				},
 				Nack: func(ctx context.Context) (err error) {
-					//  receivedMsg.Nack(true) => will redelivered again instantly (same with receivedMsg.reject)
-					//  receivedMsg.Nack(false) => will put the message to dead letter queue (same with receivedMsg.reject)
+					//  receivedMsg.Nack(false, true) => will redelivered again instantly (same with receivedMsg.reject)
+					//  receivedMsg.Nack(false, false) => will put the message to dead letter queue (same with receivedMsg.reject)
 					err = receivedMsg.Nack(false, true)
 					return
 				},
 				MoveToDeadLetterQueue: func(ctx context.Context) (err error) {
-					//  receivedMsg.Nack(true) => will redelivered again instantly (same with receivedMsg.reject)
-					//  receivedMsg.Nack(false) => will put the message to dead letter queue (same with receivedMsg.reject)
+					//  receivedMsg.Nack(false, true) => will redelivered again instantly (same with receivedMsg.reject)
+					//  receivedMsg.Nack(false, false) => will put the message to dead letter queue (same with receivedMsg.reject)
 					err = receivedMsg.Nack(false, false)
 					return
 				},
-				PutToBackOfQueueWithDelay: r.requeueMessage(meta, receivedMsg),
+				PutToBackOfQueueWithDelay: r.requeueMessageWithDLQ(meta, msg, receivedMsg),
 			}
 
 			logrus.WithFields(logrus.Fields{
@@ -293,22 +371,25 @@ func buildMessage(consumerMeta map[string]interface{}, receivedMsg amqp.Delivery
 	return msg, nil
 }
 
-func (r *rabbitMQ) requeueMessage(consumerMeta map[string]interface{},
-	receivedMsg amqp.Delivery) func(ctx context.Context, delayFn interfaces.DelayFn) (err error) {
+func (r *rabbitMQ) requeueMessageWithDLQ(consumerMeta map[string]interface{}, msg interfaces.Message, receivedMsg amqp.Delivery) func(ctx context.Context, delayFn interfaces.DelayFn) (err error) {
 	return func(ctx context.Context, delayFn interfaces.DelayFn) (err error) {
 		if delayFn == nil {
 			delayFn = interfaces.DefaultDelayFn
 		}
 		retries := extractHeaderInt(receivedMsg.Headers, headerKey.RetryCount)
 		retries++
-		delay := delayFn(retries)
-		time.Sleep(time.Duration(delay) * time.Second)
+		delayInSeconds := delayFn(retries)
+		routingKeyPrefixForRetryQueue := getRetryRoutingKey(r.option.QueueName, retries)
+		//  it will publish to each retry queue with TTL is the delayInSeconds
+		// and there will n dead letter queues based on the limit of retries config
 		headers := receivedMsg.Headers
-		headers[string(headerKey.RetryCount)] = retries
+		headers[headerKey.OriginalTopicName] = msg.Topic
+		headers[headerKey.OriginalActionName] = msg.Action
+		headers[headerKey.RetryCount] = retries
 		requeueErr := r.requeueChannel.PublishWithContext(
 			ctx,
-			receivedMsg.Exchange,
-			receivedMsg.RoutingKey,
+			r.retryExchangeName,
+			routingKeyPrefixForRetryQueue,
 			false,
 			false,
 			amqp.Publishing{
@@ -317,8 +398,10 @@ func (r *rabbitMQ) requeueMessage(consumerMeta map[string]interface{},
 				Body:        receivedMsg.Body,
 				Timestamp:   time.Now(),
 				AppId:       r.tagName,
+				Expiration:  fmt.Sprintf("%d", delayInSeconds*10000),
 			},
 		)
+		// time.Sleep(5 * time.Second)
 		if requeueErr != nil {
 			logrus.WithFields(logrus.Fields{
 				"consumer_meta": consumerMeta,
@@ -347,6 +430,10 @@ func (r *rabbitMQ) requeueMessage(consumerMeta map[string]interface{},
 		}
 		return nil
 	}
+}
+
+func getRetryRoutingKey(queueName string, retry int64) string {
+	return fmt.Sprintf("%s__retry.%d", queueName, retry)
 }
 
 func extractHeaderString(headers amqp.Table, key string) string {

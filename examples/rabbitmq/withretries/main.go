@@ -1,37 +1,9 @@
-# goqueue
-
-GoQueue - One library to rule them all. A Golang wrapper that handles all the complexity of various Queue platforms. Extensible and easy to learn.
-
-## Index
-
-- [Support](#support)
-- [Getting Started](#getting-started)
-- [Example](#example)
-- [Contribution](#contribution)
-
-## Support
-
-You can file an [Issue](https://github.com/bxcodec/goqueue/issues/new).
-See documentation in [Go.Dev](https://pkg.go.dev/github.com/bxcodec/goqueue?tab=doc)
-
-## Getting Started
-
-#### Install
-
-```shell
-go get -u github.com/bxcodec/goqueue
-```
-
-# Example
-
-```go
 package main
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
@@ -58,15 +30,12 @@ func initExchange(ch *amqp.Channel, exchangeName string) error {
 }
 
 func main() {
-
-	// Initialize the RMQ connection
 	rmqDSN := "amqp://rabbitmq:rabbitmq@localhost:5672/"
 	rmqConn, err := amqp.Dial(rmqDSN)
 	if err != nil {
 		panic(err)
 	}
 
-	// Initialize the Publisher
 	rmqPub := publisher.NewPublisher(
 		publisherOpts.PublisherPlatformRabbitMQ,
 		publisherOpts.WithRabbitMQPublisherConfig(&publisherOpts.RabbitMQPublisherConfig{
@@ -80,13 +49,13 @@ func main() {
 		),
 	)
 
-	publisherChannel, err := rmqConn.Channel()
+	requeueChannel, err := rmqConn.Channel()
 	if err != nil {
 		panic(err)
 	}
 
-	defer publisherChannel.Close()
-	initExchange(publisherChannel, "goqueue")
+	defer requeueChannel.Close()
+	initExchange(requeueChannel, "goqueue")
 
 	consumerChannel, err := rmqConn.Channel()
 	if err != nil {
@@ -97,7 +66,7 @@ func main() {
 		consumerOpts.ConsumerPlatformRabbitMQ,
 		consumerOpts.WithRabbitMQConsumerConfig(consumerOpts.RabbitMQConfigWithDefaultTopicFanOutPattern(
 			consumerChannel,
-			publisherChannel,
+			requeueChannel,
 			"goqueue",                      // exchange name
 			[]string{"goqueue.payments.#"}, // routing keys pattern
 		)),
@@ -106,7 +75,7 @@ func main() {
 			middleware.HelloWorldMiddlewareExecuteAfterInboundMessageHandler(),
 			middleware.HelloWorldMiddlewareExecuteBeforeInboundMessageHandler(),
 		),
-		consumerOpts.WithMaxRetryFailedMessage(3),
+		consumerOpts.WithMaxRetryFailedMessage(5),
 		consumerOpts.WithBatchMessageSize(1),
 		consumerOpts.WithQueueName("consumer_queue"),
 	)
@@ -135,9 +104,9 @@ func main() {
 	}()
 
 	// change to context.Background() if you want to run it forever
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	err = queueSvc.Start(ctx)
+	// ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// defer cancel()
+	err = queueSvc.Start(context.Background())
 	if err != nil {
 		panic(err)
 	}
@@ -145,17 +114,8 @@ func main() {
 
 func handler() interfaces.InboundMessageHandlerFunc {
 	return func(ctx context.Context, m interfaces.InboundMessage) (err error) {
-		data := m.Data
-		jbyt, _ := json.Marshal(data)
-		fmt.Println("Message Received: ", string(jbyt))
-		return m.Ack(ctx)
+		fmt.Printf("Message: %+v\n", m)
+		// something happend, we need to requeue the message
+		return m.PutToBackOfQueueWithDelay(ctx, interfaces.ExponentialBackoffDelayFn)
 	}
 }
-
-```
-
-## Contribution
-
----
-
-To contrib to this project, you can open a PR or an issue.

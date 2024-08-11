@@ -273,7 +273,7 @@ func handlerRequeue(t *testing.T) interfaces.InboundMessageHandlerFunc {
 			return m.RetryCount
 		}
 
-		err = m.PutToBackOfQueueWithDelay(ctx, delayFn)
+		err = m.RetryWithDelayFn(ctx, delayFn)
 		assert.NoError(t, err)
 		return
 	}

@@ -1,6 +1,6 @@
 module github.com/bxcodec/goqueue
 
-go 1.22
+go 1.23.0
 
 require (
 	github.com/google/uuid v1.6.0
@@ -8,7 +8,7 @@ require (
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.9.0
 	go.uber.org/multierr v1.11.0
-	golang.org/x/sync v0.8.0
+	golang.org/x/sync v0.14.0
 )
 
 require (

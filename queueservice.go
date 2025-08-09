@@ -65,17 +65,18 @@ func (qs *QueueService) Start(ctx context.Context) (err error) {
 // Stop stops the queue service by stopping the consumer and closing the publisher.
 // It returns an error if there was an issue stopping the consumer or closing the publisher.
 func (qs *QueueService) Stop(ctx context.Context) error {
-	if qs.consumer == nil {
-		return errors.New("consumer is not defined")
-	}
-	err := qs.consumer.Stop(ctx)
-	if err != nil {
-		return err
+	if qs.consumer != nil {
+		err := qs.consumer.Stop(ctx)
+		if err != nil {
+			return err
+		}
 	}
 
-	err = qs.publisher.Close(ctx)
-	if err != nil {
-		return err
+	if qs.publisher != nil {
+		err := qs.publisher.Close(ctx)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }

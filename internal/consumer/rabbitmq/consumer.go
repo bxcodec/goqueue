@@ -334,6 +334,14 @@ func (r *rabbitMQ) Consume(ctx context.Context,
 }
 
 func buildMessage(consumerMeta map[string]interface{}, receivedMsg amqp.Delivery) (msg interfaces.Message, err error) {
+	if len(receivedMsg.Body) == 0 {
+		logrus.WithFields(logrus.Fields{
+			"consumer_meta": consumerMeta,
+			"msg":           string(receivedMsg.Body),
+		}).Error("message body is empty, removing the message due to wrong message format")
+		return msg, errors.ErrInvalidMessageFormat
+	}
+
 	err = json.Unmarshal(receivedMsg.Body, &msg)
 	if err != nil {
 		logrus.Error("failed to unmarshal the message, got err: ", err)

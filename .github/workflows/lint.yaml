@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ["oldstable", "stable"]
+        go-version: ["stable"]
     env:
       VERBOSE: 1
 

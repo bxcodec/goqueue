@@ -339,6 +339,7 @@ func buildMessage(consumerMeta map[string]interface{}, receivedMsg amqp.Delivery
 		logrus.Error("failed to unmarshal the message, got err: ", err)
 		logrus.WithFields(logrus.Fields{
 			"consumer_meta": consumerMeta,
+			"msg":           string(receivedMsg.Body),
 			"error":         err,
 		}).Error("failed to unmarshal the message, removing the message due to wrong message format")
 		return msg, errors.ErrInvalidMessageFormat

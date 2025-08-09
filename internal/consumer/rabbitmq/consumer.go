@@ -239,7 +239,15 @@ func (r *rabbitMQ) Consume(ctx context.Context,
 				"consumer_meta": meta,
 			}).Info("stopping the worker")
 			return
-		case receivedMsg := <-r.msgReceiver:
+		case receivedMsg, ok := <-r.msgReceiver:
+			if !ok {
+				// deliveries channel closed (e.g., due to Stop/Cancel or connection closure)
+				logrus.WithFields(logrus.Fields{
+					"queue_name":    r.option.QueueName,
+					"consumer_meta": meta,
+				}).Info("message receiver closed, stopping the worker")
+				return
+			}
 			msg, err := buildMessage(meta, receivedMsg)
 			if err != nil {
 				if err == errors.ErrInvalidMessageFormat {

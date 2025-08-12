@@ -2,7 +2,7 @@
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/bxcodec/goqueue.svg)](https://pkg.go.dev/github.com/bxcodec/goqueue)
 [![Go Report Card](https://goreportcard.com/badge/github.com/bxcodec/goqueue)](https://goreportcard.com/report/github.com/bxcodec/goqueue)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/bxcodec/goqueue/blob/main/LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/bxcodec/goqueue)](https://github.com/bxcodec/goqueue/stargazers)
 
 **One library to rule them all** - A powerful, extensible, and developer-friendly Go wrapper that simplifies message queue operations across multiple platforms. Build robust, scalable applications with consistent queue operations, regardless of your underlying message broker.

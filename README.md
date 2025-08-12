@@ -27,6 +27,7 @@
 - [🔧 Advanced Features](#-advanced-features)
 - [🎮 Examples](#-examples)
 - [🏗️ Architecture](#️-architecture)
+- [📚 Documentation](#-documentation)
 - [🤝 Contributing](#-contributing)
 - [📄 License](#-license)
 
@@ -54,7 +55,8 @@ import (
 )
 
 func main() {
-    // Create queue service
+
+	// Create queue service
     queueSvc := goqueue.NewQueueService(
         options.WithConsumer(myConsumer),
         options.WithPublisher(myPublisher),
@@ -118,9 +120,6 @@ func handleMessage(ctx context.Context, m interfaces.InboundMessage) error {
 ```bash
 # Install the core library
 go get -u github.com/bxcodec/goqueue
-
-# For RabbitMQ support (included by default)
-go get -u github.com/rabbitmq/amqp091-go
 ```
 
 ### Requirements
@@ -365,15 +364,34 @@ Run the test suite:
 
 ```bash
 # Unit tests
-go test ./...
+make test
 
 # Integration tests with RabbitMQ
-docker-compose -f test.compose.yaml up -d
-go test -tags=integration ./...
+make integration-test
 
-# Benchmark tests
-go test -bench=. -benchmem ./...
 ```
+
+---
+
+## 📚 Documentation
+
+### 📖 Component Documentation
+
+Explore our comprehensive guides for each system component:
+
+| Component             | Description                                 | Documentation                                   |
+| --------------------- | ------------------------------------------- | ----------------------------------------------- |
+| 🔌 **Middleware**     | Extend functionality with custom logic      | [📖 Middleware Guide](docs/MIDDLEWARE.md)       |
+| 📨 **Consumer**       | Reliable message consumption and processing | [📖 Consumer Guide](docs/CONSUMER.md)           |
+| 📤 **Publisher**      | High-performance message publishing         | [📖 Publisher Guide](docs/PUBLISHER.md)         |
+| 🔄 **RabbitMQ Retry** | Advanced retry mechanisms for RabbitMQ      | [📖 Retry Architecture](docs/RABBITMQ-RETRY.md) |
+
+### 🎯 Quick Links
+
+- **[📚 Full Documentation Index](docs/README.md)** - Complete documentation overview
+- **[🔧 API Reference](https://pkg.go.dev/github.com/bxcodec/goqueue)** - Go package documentation
+- **[🎮 Examples](examples/)** - Working code examples
+- **[🐛 Troubleshooting](docs/README.md#troubleshooting)** - Common issues and solutions
 
 ---
 

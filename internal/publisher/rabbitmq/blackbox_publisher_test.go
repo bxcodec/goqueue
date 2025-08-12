@@ -8,6 +8,11 @@ import (
 	"testing"
 	"time"
 
+	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/rs/zerolog/log"
+	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
+
 	"github.com/bxcodec/goqueue"
 	headerKey "github.com/bxcodec/goqueue/headers/key"
 	headerVal "github.com/bxcodec/goqueue/headers/value"
@@ -15,10 +20,6 @@ import (
 	rmq "github.com/bxcodec/goqueue/internal/publisher/rabbitmq"
 	"github.com/bxcodec/goqueue/options"
 	publisherOpts "github.com/bxcodec/goqueue/options/publisher"
-	amqp "github.com/rabbitmq/amqp091-go"
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
 )
 
 const (
@@ -50,13 +51,12 @@ func TestSuiteRabbitMQPublisher(t *testing.T) {
 	rabbitMQTestSuite := &rabbitMQTestSuite{
 		rmqURL: rmqURL,
 	}
-	logrus.SetLevel(logrus.DebugLevel)
-	logrus.SetFormatter(&logrus.JSONFormatter{})
+	log.Logger = log.With().Caller().Logger()
 	rabbitMQTestSuite.initConnection(t)
 	suite.Run(t, rabbitMQTestSuite)
 }
 
-func (s *rabbitMQTestSuite) BeforeTest(_, _ string) {
+func (*rabbitMQTestSuite) BeforeTest(_, _ string) {
 }
 
 func (s *rabbitMQTestSuite) AfterTest(_, _ string) {
@@ -107,8 +107,11 @@ func (s *rabbitMQTestSuite) initQueueForTesting(t *testing.T, exchangePattern ..
 	require.NoError(t, err)
 
 	for _, patternRoutingKey := range exchangePattern {
-		logrus.Printf("binding queue %s to exchange %s with routing key %s",
-			q.Name, testExchange, patternRoutingKey)
+		log.Info().
+			Str("queue_name", q.Name).
+			Str("exchange", testExchange).
+			Str("routing_key", patternRoutingKey).
+			Msg("binding queue to exchange")
 
 		err = s.consumerChannel.QueueBind(
 			rabbitMQTestQueueName, // queue name
@@ -120,13 +123,13 @@ func (s *rabbitMQTestSuite) initQueueForTesting(t *testing.T, exchangePattern ..
 		require.NoError(t, err)
 	}
 }
-func (s *rabbitMQTestSuite) getMockData(action string, identifier string) (res interfaces.Message) {
+func (*rabbitMQTestSuite) getMockData(action, identifier string) (res interfaces.Message) {
 	res = interfaces.Message{
 		Action:      action,
 		ID:          identifier,
 		Topic:       testExchange,
 		ContentType: headerVal.ContentTypeJSON,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"message": "hello-world-test",
 		},
 		Timestamp: time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC),
@@ -150,7 +153,7 @@ func (s *rabbitMQTestSuite) TestPublisher() {
 	)
 	var err error
 	totalPublishedMessage := 10
-	for i := 0; i < totalPublishedMessage; i++ {
+	for i := range totalPublishedMessage {
 		err = queueSvc.Publish(context.Background(), s.getMockData(testAction, fmt.Sprintf("test-id-%d", i)))
 		s.Require().NoError(err)
 	}
@@ -178,7 +181,7 @@ func (s *rabbitMQTestSuite) TestPublisher() {
 			case <-ctx.Done():
 				done <- true
 			case d := <-msgs:
-				var content map[string]interface{}
+				var content map[string]any
 				inErr := json.Unmarshal(d.Body, &content)
 
 				/*
@@ -210,7 +213,8 @@ func (s *rabbitMQTestSuite) TestPublisher() {
 		}
 	}()
 
-	logrus.Printf("waiting for the message to be consumed")
+	log.Info().
+		Msg("waiting for the message to be consumed")
 	<-done
 
 	err = publisher.Close(context.Background())

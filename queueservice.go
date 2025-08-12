@@ -5,11 +5,12 @@ import (
 	"errors"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/bxcodec/goqueue/interfaces"
 	"github.com/bxcodec/goqueue/internal/consumer"
 	"github.com/bxcodec/goqueue/internal/publisher"
 	"github.com/bxcodec/goqueue/options"
-	"golang.org/x/sync/errgroup"
 )
 
 // QueueService represents a service that handles message queuing operations.
@@ -49,8 +50,8 @@ func (qs *QueueService) Start(ctx context.Context) (err error) {
 	}
 
 	g, ctx := errgroup.WithContext(ctx)
-	for i := 0; i < qs.NumberOfConsumer; i++ {
-		meta := map[string]interface{}{
+	for i := range qs.NumberOfConsumer {
+		meta := map[string]any{
 			"consumer_id":  i,
 			"started_time": time.Now(),
 		}
@@ -65,17 +66,18 @@ func (qs *QueueService) Start(ctx context.Context) (err error) {
 // Stop stops the queue service by stopping the consumer and closing the publisher.
 // It returns an error if there was an issue stopping the consumer or closing the publisher.
 func (qs *QueueService) Stop(ctx context.Context) error {
-	if qs.consumer == nil {
-		return errors.New("consumer is not defined")
-	}
-	err := qs.consumer.Stop(ctx)
-	if err != nil {
-		return err
+	if qs.consumer != nil {
+		err := qs.consumer.Stop(ctx)
+		if err != nil {
+			return err
+		}
 	}
 
-	err = qs.publisher.Close(ctx)
-	if err != nil {
-		return err
+	if qs.publisher != nil {
+		err := qs.publisher.Close(ctx)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }

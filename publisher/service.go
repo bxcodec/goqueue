@@ -3,6 +3,7 @@ package publisher
 import (
 	"github.com/bxcodec/goqueue/internal/publisher"
 	"github.com/bxcodec/goqueue/internal/publisher/rabbitmq"
+	_ "github.com/bxcodec/goqueue/internal/shared" // Auto-setup logging
 	"github.com/bxcodec/goqueue/options"
 	publisherOpts "github.com/bxcodec/goqueue/options/publisher"
 )

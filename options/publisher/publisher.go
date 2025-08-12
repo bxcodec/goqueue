@@ -1,11 +1,12 @@
 package publisher
 
 import (
+	"github.com/google/uuid"
+	amqp "github.com/rabbitmq/amqp091-go"
+
 	headerVal "github.com/bxcodec/goqueue/headers/value"
 	"github.com/bxcodec/goqueue/interfaces"
 	"github.com/bxcodec/goqueue/options"
-	"github.com/google/uuid"
-	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 const (

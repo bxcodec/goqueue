@@ -2,10 +2,30 @@ package middleware
 
 import (
 	"context"
+	"errors"
 
-	"github.com/bxcodec/goqueue/errors"
+	goqueueErrors "github.com/bxcodec/goqueue/errors"
 	"github.com/bxcodec/goqueue/interfaces"
 )
+
+// mapError maps generic errors to specific goqueue error types
+func mapError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	switch {
+	case errors.Is(err, goqueueErrors.ErrInvalidMessageFormat):
+		return goqueueErrors.ErrInvalidMessageFormat
+	case errors.Is(err, goqueueErrors.ErrEncodingFormatNotSupported):
+		return goqueueErrors.ErrEncodingFormatNotSupported
+	default:
+		return goqueueErrors.Error{
+			Code:    goqueueErrors.UnKnownError,
+			Message: err.Error(),
+		}
+	}
+}
 
 // PublisherDefaultErrorMapper returns a middleware function that maps publisher errors to specific error types.
 // It takes a next PublisherFunc as input and returns a new PublisherFunc that performs error mapping.
@@ -15,20 +35,7 @@ func PublisherDefaultErrorMapper() interfaces.PublisherMiddlewareFunc {
 	return func(next interfaces.PublisherFunc) interfaces.PublisherFunc {
 		return func(ctx context.Context, e interfaces.Message) (err error) {
 			err = next(ctx, e)
-			if err != nil {
-				switch err {
-				case errors.ErrInvalidMessageFormat:
-					return errors.ErrInvalidMessageFormat
-				case errors.ErrEncodingFormatNotSupported:
-					return errors.ErrEncodingFormatNotSupported
-				default:
-					return errors.Error{
-						Code:    errors.UnKnownError,
-						Message: err.Error(),
-					}
-				}
-			}
-			return nil
+			return mapError(err)
 		}
 	}
 }
@@ -42,20 +49,7 @@ func InboundMessageHandlerDefaultErrorMapper() interfaces.InboundMessageHandlerM
 	return func(next interfaces.InboundMessageHandlerFunc) interfaces.InboundMessageHandlerFunc {
 		return func(ctx context.Context, m interfaces.InboundMessage) (err error) {
 			err = next(ctx, m)
-			if err != nil {
-				switch err {
-				case errors.ErrInvalidMessageFormat:
-					return errors.ErrInvalidMessageFormat
-				case errors.ErrEncodingFormatNotSupported:
-					return errors.ErrEncodingFormatNotSupported
-				default:
-					return errors.Error{
-						Code:    errors.UnKnownError,
-						Message: err.Error(),
-					}
-				}
-			}
-			return nil
+			return mapError(err)
 		}
 	}
 }

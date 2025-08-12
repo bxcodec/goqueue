@@ -3,20 +3,26 @@ package rabbitmq
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
-	"github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 
-	"github.com/bxcodec/goqueue/errors"
+	goqueueErrors "github.com/bxcodec/goqueue/errors"
 	headerKey "github.com/bxcodec/goqueue/headers/key"
 	headerVal "github.com/bxcodec/goqueue/headers/value"
 	"github.com/bxcodec/goqueue/interfaces"
 	"github.com/bxcodec/goqueue/internal/consumer"
 	"github.com/bxcodec/goqueue/middleware"
 	consumerOpts "github.com/bxcodec/goqueue/options/consumer"
+)
+
+const (
+	// millisecondsMultiplier converts seconds to milliseconds for RabbitMQ expiration
+	millisecondsMultiplier = 10_000
 )
 
 // rabbitMQ is the subscriber handler for rabbitmq
@@ -70,7 +76,7 @@ func (r *rabbitMQ) initQueue() {
 		r.option.RabbitMQConsumerConfig.QueueDeclareConfig.Args,
 	)
 	if err != nil {
-		logrus.Fatal("error declaring the queue, ", err)
+		log.Fatal().Err(err).Msg("error declaring the queue")
 	}
 
 	for _, eventType := range r.option.RabbitMQConsumerConfig.QueueBindConfig.RoutingKeys {
@@ -82,7 +88,7 @@ func (r *rabbitMQ) initQueue() {
 			r.option.RabbitMQConsumerConfig.QueueBindConfig.Args,
 		)
 		if err != nil {
-			logrus.Fatal("error binding the queue, ", err)
+			log.Fatal().Err(err).Msg("error binding the queue")
 		}
 	}
 }
@@ -100,7 +106,7 @@ func (r *rabbitMQ) initConsumer() {
 
 	err := r.consumerChannel.Qos(r.option.BatchMessageSize, 0, false)
 	if err != nil {
-		logrus.Fatal("error when setting the prefetch count, ", err)
+		log.Fatal().Err(err).Msg("error when setting the prefetch count")
 	}
 
 	receiver, err := r.consumerChannel.Consume(
@@ -127,7 +133,7 @@ func (r *rabbitMQ) initConsumer() {
 		nil,
 	)
 	if err != nil {
-		logrus.Fatal(err, "error consuming message")
+		log.Fatal().Err(err).Msg("error consuming message")
 	}
 	r.msgReceiver = receiver
 }
@@ -148,7 +154,7 @@ func (r *rabbitMQ) initRetryModule() {
 	)
 
 	if err != nil {
-		logrus.Fatal("error declaring the retry exchange, ", err)
+		log.Fatal().Err(err).Msg("error declaring the retry exchange")
 	}
 
 	// declare dead letter exchange
@@ -163,7 +169,7 @@ func (r *rabbitMQ) initRetryModule() {
 	)
 
 	if err != nil {
-		logrus.Fatal("error declaring the retry dead letter exchange, ", err)
+		log.Fatal().Err(err).Msg("error declaring the retry dead letter exchange")
 	}
 
 	// bind dead letter exchange to original queue
@@ -175,7 +181,7 @@ func (r *rabbitMQ) initRetryModule() {
 		nil,
 	)
 	if err != nil {
-		logrus.Fatal("error binding the dead letter exchange to the original queue, ", err)
+		log.Fatal().Err(err).Msg("error binding the dead letter exchange to the original queue")
 	}
 
 	// declare retry queue
@@ -192,7 +198,7 @@ func (r *rabbitMQ) initRetryModule() {
 			},
 		)
 		if err != nil {
-			logrus.Fatal("error declaring the retry queue, ", err)
+			log.Fatal().Err(err).Msg("error declaring the retry queue")
 		}
 
 		// bind retry queue to retry exchange
@@ -204,7 +210,7 @@ func (r *rabbitMQ) initRetryModule() {
 			nil,
 		)
 		if err != nil {
-			logrus.Fatal("error binding the retry queue, ", err)
+			log.Fatal().Err(err).Msg("error binding the retry queue")
 		}
 	}
 }
@@ -213,7 +219,8 @@ func (r *rabbitMQ) initRetryModule() {
 // It takes a context, an inbound message handler, and a map of metadata as input parameters.
 // The function continuously listens for messages from the queue and processes them until the context is canceled.
 // If the context is canceled, the function stops consuming messages and returns.
-// For each received message, the function builds an inbound message, extracts the retry count, and checks if the maximum retry count has been reached.
+// For each received message, the function builds an inbound message, extracts the retry count,
+// and checks if the maximum retry count has been reached.
 // If the maximum retry count has been reached, the message is moved to the dead letter queue.
 // Otherwise, the message is passed to the message handler for processing.
 // The message handler is responsible for handling the message and returning an error if any.
@@ -225,30 +232,38 @@ func (r *rabbitMQ) initRetryModule() {
 // The function returns an error if any occurred during message handling or if the context was canceled.
 func (r *rabbitMQ) Consume(ctx context.Context,
 	h interfaces.InboundMessageHandler,
-	meta map[string]interface{}) (err error) {
-	logrus.WithFields(logrus.Fields{
-		"queue_name":    r.option.QueueName,
-		"consumer_meta": meta,
-	}).Info("starting the worker")
+	meta map[string]any) (err error) {
+	log.Info().
+		Str("queue_name", r.option.QueueName).
+		Interface("consumer_meta", meta).
+		Msg("starting the worker")
 
 	for {
 		select {
 		case <-ctx.Done():
-			logrus.WithFields(logrus.Fields{
-				"queue_name":    r.option.QueueName,
-				"consumer_meta": meta,
-			}).Info("stopping the worker")
-			return
-		case receivedMsg := <-r.msgReceiver:
+			log.Info().
+				Str("queue_name", r.option.QueueName).
+				Interface("consumer_meta", meta).
+				Msg("stopping the worker")
+			return err
+		case receivedMsg, ok := <-r.msgReceiver:
+			if !ok {
+				// deliveries channel closed (e.g., due to Stop/Cancel or connection closure)
+				log.Info().
+					Str("queue_name", r.option.QueueName).
+					Interface("consumer_meta", meta).
+					Msg("message receiver closed, stopping the worker")
+				return err
+			}
 			msg, err := buildMessage(meta, receivedMsg)
 			if err != nil {
-				if err == errors.ErrInvalidMessageFormat {
+				if errors.Is(err, goqueueErrors.ErrInvalidMessageFormat) {
 					nackErr := receivedMsg.Nack(false, false) // nack with requeue false
 					if nackErr != nil {
-						logrus.WithFields(logrus.Fields{
-							"consumer_meta": meta,
-							"error":         nackErr,
-						}).Error("failed to nack the message")
+						log.Error().
+							Interface("consumer_meta", meta).
+							Err(nackErr).
+							Msg("failed to nack the message")
 					}
 				}
 				continue
@@ -256,26 +271,26 @@ func (r *rabbitMQ) Consume(ctx context.Context,
 
 			retryCount := extractHeaderInt(receivedMsg.Headers, headerKey.RetryCount)
 			if retryCount > r.option.MaxRetryFailedMessage {
-				logrus.WithFields(logrus.Fields{
-					"consumer_meta": meta,
-					"message_id":    msg.ID,
-					"topic":         msg.Topic,
-					"action":        msg.Action,
-					"timestamp":     msg.Timestamp,
-				}).Error("max retry failed message reached, moving message to dead letter queue")
+				log.Error().
+					Interface("consumer_meta", meta).
+					Str("message_id", msg.ID).
+					Str("topic", msg.Topic).
+					Str("action", msg.Action).
+					Time("timestamp", msg.Timestamp).
+					Msg("max retry failed message reached, moving message to dead letter queue")
 				err = receivedMsg.Nack(false, false)
 				if err != nil {
-					logrus.WithFields(logrus.Fields{
-						"consumer_meta": meta,
-						"error":         err,
-					}).Error("failed to nack the message")
+					log.Error().
+						Interface("consumer_meta", meta).
+						Err(err).
+						Msg("failed to nack the message")
 				}
 				continue
 			}
 			m := interfaces.InboundMessage{
 				Message:    msg,
 				RetryCount: retryCount,
-				Metadata: map[string]interface{}{
+				Metadata: map[string]any{
 					"app-id":           receivedMsg.AppId,
 					"consumer-tag":     receivedMsg.ConsumerTag,
 					"content-encoding": receivedMsg.ContentEncoding,
@@ -291,17 +306,17 @@ func (r *rabbitMQ) Consume(ctx context.Context,
 					"type":             receivedMsg.Type,
 					"user-id":          receivedMsg.UserId,
 				},
-				Ack: func(ctx context.Context) (err error) {
+				Ack: func(_ context.Context) (err error) {
 					err = receivedMsg.Ack(false)
 					return
 				},
-				Nack: func(ctx context.Context) (err error) {
+				Nack: func(_ context.Context) (err error) {
 					//  receivedMsg.Nack(false, true) => will redelivered again instantly (same with receivedMsg.reject)
 					//  receivedMsg.Nack(false, false) => will put the message to dead letter queue (same with receivedMsg.reject)
 					err = receivedMsg.Nack(false, true)
 					return
 				},
-				MoveToDeadLetterQueue: func(ctx context.Context) (err error) {
+				MoveToDeadLetterQueue: func(_ context.Context) (err error) {
 					//  receivedMsg.Nack(false, true) => will redelivered again instantly (same with receivedMsg.reject)
 					//  receivedMsg.Nack(false, false) => will put the message to dead letter queue (same with receivedMsg.reject)
 					err = receivedMsg.Nack(false, false)
@@ -310,38 +325,47 @@ func (r *rabbitMQ) Consume(ctx context.Context,
 				RetryWithDelayFn: r.requeueMessageWithDLQ(meta, msg, receivedMsg),
 			}
 
-			logrus.WithFields(logrus.Fields{
-				"consumer_meta": meta,
-				"message_id":    msg.ID,
-				"topic":         msg.Topic,
-				"action":        msg.Action,
-				"timestamp":     msg.Timestamp,
-			}).Info("message received")
+			log.Info().
+				Interface("consumer_meta", meta).
+				Str("message_id", msg.ID).
+				Str("topic", msg.Topic).
+				Str("action", msg.Action).
+				Time("timestamp", msg.Timestamp).
+				Msg("message received")
 
 			handleCtx := middleware.ApplyHandlerMiddleware(h.HandleMessage, r.option.Middlewares...)
 			err = handleCtx(ctx, m)
 			if err != nil {
-				logrus.WithFields(logrus.Fields{
-					"consumer_meta": meta,
-					"message_id":    msg.ID,
-					"topic":         msg.Topic,
-					"action":        msg.Action,
-					"timestamp":     msg.Timestamp,
-				}).Error("error handling message, ", err)
+				log.Error().
+					Interface("consumer_meta", meta).
+					Str("message_id", msg.ID).
+					Str("topic", msg.Topic).
+					Str("action", msg.Action).
+					Time("timestamp", msg.Timestamp).
+					Err(err).
+					Msg("error handling message")
 			}
 		}
 	}
 }
 
-func buildMessage(consumerMeta map[string]interface{}, receivedMsg amqp.Delivery) (msg interfaces.Message, err error) {
+func buildMessage(consumerMeta map[string]any, receivedMsg amqp.Delivery) (msg interfaces.Message, err error) {
+	if len(receivedMsg.Body) == 0 {
+		log.Error().
+			Interface("consumer_meta", consumerMeta).
+			Str("msg", string(receivedMsg.Body)).
+			Msg("message body is empty, removing the message due to wrong message format")
+		return msg, goqueueErrors.ErrInvalidMessageFormat
+	}
+
 	err = json.Unmarshal(receivedMsg.Body, &msg)
 	if err != nil {
-		logrus.Error("failed to unmarshal the message, got err: ", err)
-		logrus.WithFields(logrus.Fields{
-			"consumer_meta": consumerMeta,
-			"error":         err,
-		}).Error("failed to unmarshal the message, removing the message due to wrong message format")
-		return msg, errors.ErrInvalidMessageFormat
+		log.Error().
+			Interface("consumer_meta", consumerMeta).
+			Str("msg", string(receivedMsg.Body)).
+			Err(err).
+			Msg("failed to unmarshal the message, removing the message due to wrong message format")
+		return msg, goqueueErrors.ErrInvalidMessageFormat
 	}
 
 	if msg.ID == "" {
@@ -363,18 +387,18 @@ func buildMessage(consumerMeta map[string]interface{}, receivedMsg amqp.Delivery
 		msg.Headers = receivedMsg.Headers
 	}
 	if msg.Data == "" || msg.Data == nil {
-		logrus.WithFields(logrus.Fields{
-			"consumer_meta": consumerMeta,
-			"msg":           msg,
-		}).Error("message data is empty, removing the message due to wrong message format")
-		return msg, errors.ErrInvalidMessageFormat
+		log.Error().
+			Interface("consumer_meta", consumerMeta).
+			Interface("msg", msg).
+			Msg("message data is empty, removing the message due to wrong message format")
+		return msg, goqueueErrors.ErrInvalidMessageFormat
 	}
 
 	msg.SetSchemaVersion(extractHeaderString(receivedMsg.Headers, headerKey.SchemaVer))
 	return msg, nil
 }
 
-func (r *rabbitMQ) requeueMessageWithDLQ(consumerMeta map[string]interface{}, msg interfaces.Message,
+func (r *rabbitMQ) requeueMessageWithDLQ(consumerMeta map[string]any, msg interfaces.Message,
 	receivedMsg amqp.Delivery) func(ctx context.Context, delayFn interfaces.DelayFn) (err error) {
 	return func(ctx context.Context, delayFn interfaces.DelayFn) (err error) {
 		if delayFn == nil {
@@ -400,21 +424,21 @@ func (r *rabbitMQ) requeueMessageWithDLQ(consumerMeta map[string]interface{}, ms
 				Body:        receivedMsg.Body,
 				Timestamp:   time.Now(),
 				AppId:       r.tagName,
-				Expiration:  fmt.Sprintf("%d", delayInSeconds*10000),
+				Expiration:  fmt.Sprintf("%d", delayInSeconds*millisecondsMultiplier),
 			},
 		)
 
 		if requeueErr != nil {
-			logrus.WithFields(logrus.Fields{
-				"consumer_meta": consumerMeta,
-				"error":         requeueErr,
-			}).Error("failed to requeue the message")
+			log.Error().
+				Interface("consumer_meta", consumerMeta).
+				Err(requeueErr).
+				Msg("failed to requeue the message")
 			err = receivedMsg.Nack(false, false) // move to DLQ instead (depend on the RMQ server configuration)
 			if err != nil {
-				logrus.WithFields(logrus.Fields{
-					"consumer_meta": consumerMeta,
-					"error":         err,
-				}).Error("failed to nack the message")
+				log.Error().
+					Interface("consumer_meta", consumerMeta).
+					Err(err).
+					Msg("failed to nack the message")
 				return err
 			}
 			return requeueErr
@@ -424,10 +448,10 @@ func (r *rabbitMQ) requeueMessageWithDLQ(consumerMeta map[string]interface{}, ms
 		// ack the message
 		err = receivedMsg.Ack(false)
 		if err != nil {
-			logrus.WithFields(logrus.Fields{
-				"consumer_meta": consumerMeta,
-				"error":         err,
-			}).Error("failed to ack the message")
+			log.Error().
+				Interface("consumer_meta", consumerMeta).
+				Err(err).
+				Msg("failed to ack the message")
 			return err
 		}
 		return nil

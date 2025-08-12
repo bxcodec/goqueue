@@ -1,9 +1,10 @@
 package consumer
 
 import (
+	amqp "github.com/rabbitmq/amqp091-go"
+
 	"github.com/bxcodec/goqueue/interfaces"
 	"github.com/bxcodec/goqueue/options"
-	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 const (

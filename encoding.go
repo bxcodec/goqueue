@@ -20,11 +20,11 @@ type DecoderFn func(ctx context.Context, data []byte) (m interfaces.Message, err
 var (
 	// JSONEncoder is an implementation of the EncoderFn interface
 	// that encodes a Message into JSON format.
-	JSONEncoder EncoderFn = func(ctx context.Context, m interfaces.Message) (data []byte, err error) {
+	JSONEncoder EncoderFn = func(_ context.Context, m interfaces.Message) (data []byte, err error) {
 		return json.Marshal(m)
 	}
 	// JSONDecoder is a DecoderFn implementation that decodes JSON data into a Message.
-	JSONDecoder DecoderFn = func(ctx context.Context, data []byte) (m interfaces.Message, err error) {
+	JSONDecoder DecoderFn = func(_ context.Context, data []byte) (m interfaces.Message, err error) {
 		err = json.Unmarshal(data, &m)
 		return
 	}
@@ -73,6 +73,7 @@ var (
 	DefaultEncoding = JSONEncoding
 )
 
+//nolint:gochecknoinits // Required for auto-registration of default JSON encoding
 func init() {
 	AddGoQueueEncoding(JSONEncoding.ContentType, JSONEncoding)
 }

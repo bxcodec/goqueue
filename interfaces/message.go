@@ -40,7 +40,7 @@ type Message struct {
 	// This is set by the publisher to identify the headers of the message.
 	// This library will provide extra headers values by default based on the library type.
 	// Don't use any prefix with :goqueue-, it will conflicted and overrided by the library.
-	Headers map[string]interface{} `json:"-"`
+	Headers map[string]any `json:"-"`
 	// ServiceAgent is the service agent that will be used to publish the message.
 	// This is set by the publisher to identify the service agent that will be used to publish the message.
 	// This will be set by the library and override any value

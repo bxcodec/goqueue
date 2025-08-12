@@ -18,7 +18,7 @@ var (
 	}
 
 	// NoDelayFn is a DelayFn implementation that returns 0 delay for retries.
-	NoDelayFn DelayFn = func(currenRetries int64) (delay int64) {
+	NoDelayFn DelayFn = func(_ int64) (delay int64) {
 		return 0
 	}
 	// DefaultDelayFn is the default delay function that will be used if no delay function is provided.

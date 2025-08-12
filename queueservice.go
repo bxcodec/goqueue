@@ -5,11 +5,12 @@ import (
 	"errors"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/bxcodec/goqueue/interfaces"
 	"github.com/bxcodec/goqueue/internal/consumer"
 	"github.com/bxcodec/goqueue/internal/publisher"
 	"github.com/bxcodec/goqueue/options"
-	"golang.org/x/sync/errgroup"
 )
 
 // QueueService represents a service that handles message queuing operations.
@@ -49,8 +50,8 @@ func (qs *QueueService) Start(ctx context.Context) (err error) {
 	}
 
 	g, ctx := errgroup.WithContext(ctx)
-	for i := 0; i < qs.NumberOfConsumer; i++ {
-		meta := map[string]interface{}{
+	for i := range qs.NumberOfConsumer {
+		meta := map[string]any{
 			"consumer_id":  i,
 			"started_time": time.Now(),
 		}

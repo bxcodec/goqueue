@@ -3,6 +3,7 @@ package rabbitmq
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -10,13 +11,18 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/rs/zerolog/log"
 
-	"github.com/bxcodec/goqueue/errors"
+	goqueueErrors "github.com/bxcodec/goqueue/errors"
 	headerKey "github.com/bxcodec/goqueue/headers/key"
 	headerVal "github.com/bxcodec/goqueue/headers/value"
 	"github.com/bxcodec/goqueue/interfaces"
 	"github.com/bxcodec/goqueue/internal/consumer"
 	"github.com/bxcodec/goqueue/middleware"
 	consumerOpts "github.com/bxcodec/goqueue/options/consumer"
+)
+
+const (
+	// millisecondsMultiplier converts seconds to milliseconds for RabbitMQ expiration
+	millisecondsMultiplier = 10_000
 )
 
 // rabbitMQ is the subscriber handler for rabbitmq
@@ -213,7 +219,8 @@ func (r *rabbitMQ) initRetryModule() {
 // It takes a context, an inbound message handler, and a map of metadata as input parameters.
 // The function continuously listens for messages from the queue and processes them until the context is canceled.
 // If the context is canceled, the function stops consuming messages and returns.
-// For each received message, the function builds an inbound message, extracts the retry count, and checks if the maximum retry count has been reached.
+// For each received message, the function builds an inbound message, extracts the retry count,
+// and checks if the maximum retry count has been reached.
 // If the maximum retry count has been reached, the message is moved to the dead letter queue.
 // Otherwise, the message is passed to the message handler for processing.
 // The message handler is responsible for handling the message and returning an error if any.
@@ -225,7 +232,7 @@ func (r *rabbitMQ) initRetryModule() {
 // The function returns an error if any occurred during message handling or if the context was canceled.
 func (r *rabbitMQ) Consume(ctx context.Context,
 	h interfaces.InboundMessageHandler,
-	meta map[string]interface{}) (err error) {
+	meta map[string]any) (err error) {
 	log.Info().
 		Str("queue_name", r.option.QueueName).
 		Interface("consumer_meta", meta).
@@ -238,7 +245,7 @@ func (r *rabbitMQ) Consume(ctx context.Context,
 				Str("queue_name", r.option.QueueName).
 				Interface("consumer_meta", meta).
 				Msg("stopping the worker")
-			return
+			return err
 		case receivedMsg, ok := <-r.msgReceiver:
 			if !ok {
 				// deliveries channel closed (e.g., due to Stop/Cancel or connection closure)
@@ -246,11 +253,11 @@ func (r *rabbitMQ) Consume(ctx context.Context,
 					Str("queue_name", r.option.QueueName).
 					Interface("consumer_meta", meta).
 					Msg("message receiver closed, stopping the worker")
-				return
+				return err
 			}
 			msg, err := buildMessage(meta, receivedMsg)
 			if err != nil {
-				if err == errors.ErrInvalidMessageFormat {
+				if errors.Is(err, goqueueErrors.ErrInvalidMessageFormat) {
 					nackErr := receivedMsg.Nack(false, false) // nack with requeue false
 					if nackErr != nil {
 						log.Error().
@@ -283,7 +290,7 @@ func (r *rabbitMQ) Consume(ctx context.Context,
 			m := interfaces.InboundMessage{
 				Message:    msg,
 				RetryCount: retryCount,
-				Metadata: map[string]interface{}{
+				Metadata: map[string]any{
 					"app-id":           receivedMsg.AppId,
 					"consumer-tag":     receivedMsg.ConsumerTag,
 					"content-encoding": receivedMsg.ContentEncoding,
@@ -299,17 +306,17 @@ func (r *rabbitMQ) Consume(ctx context.Context,
 					"type":             receivedMsg.Type,
 					"user-id":          receivedMsg.UserId,
 				},
-				Ack: func(ctx context.Context) (err error) {
+				Ack: func(_ context.Context) (err error) {
 					err = receivedMsg.Ack(false)
 					return
 				},
-				Nack: func(ctx context.Context) (err error) {
+				Nack: func(_ context.Context) (err error) {
 					//  receivedMsg.Nack(false, true) => will redelivered again instantly (same with receivedMsg.reject)
 					//  receivedMsg.Nack(false, false) => will put the message to dead letter queue (same with receivedMsg.reject)
 					err = receivedMsg.Nack(false, true)
 					return
 				},
-				MoveToDeadLetterQueue: func(ctx context.Context) (err error) {
+				MoveToDeadLetterQueue: func(_ context.Context) (err error) {
 					//  receivedMsg.Nack(false, true) => will redelivered again instantly (same with receivedMsg.reject)
 					//  receivedMsg.Nack(false, false) => will put the message to dead letter queue (same with receivedMsg.reject)
 					err = receivedMsg.Nack(false, false)
@@ -342,13 +349,13 @@ func (r *rabbitMQ) Consume(ctx context.Context,
 	}
 }
 
-func buildMessage(consumerMeta map[string]interface{}, receivedMsg amqp.Delivery) (msg interfaces.Message, err error) {
+func buildMessage(consumerMeta map[string]any, receivedMsg amqp.Delivery) (msg interfaces.Message, err error) {
 	if len(receivedMsg.Body) == 0 {
 		log.Error().
 			Interface("consumer_meta", consumerMeta).
 			Str("msg", string(receivedMsg.Body)).
 			Msg("message body is empty, removing the message due to wrong message format")
-		return msg, errors.ErrInvalidMessageFormat
+		return msg, goqueueErrors.ErrInvalidMessageFormat
 	}
 
 	err = json.Unmarshal(receivedMsg.Body, &msg)
@@ -358,7 +365,7 @@ func buildMessage(consumerMeta map[string]interface{}, receivedMsg amqp.Delivery
 			Str("msg", string(receivedMsg.Body)).
 			Err(err).
 			Msg("failed to unmarshal the message, removing the message due to wrong message format")
-		return msg, errors.ErrInvalidMessageFormat
+		return msg, goqueueErrors.ErrInvalidMessageFormat
 	}
 
 	if msg.ID == "" {
@@ -384,14 +391,14 @@ func buildMessage(consumerMeta map[string]interface{}, receivedMsg amqp.Delivery
 			Interface("consumer_meta", consumerMeta).
 			Interface("msg", msg).
 			Msg("message data is empty, removing the message due to wrong message format")
-		return msg, errors.ErrInvalidMessageFormat
+		return msg, goqueueErrors.ErrInvalidMessageFormat
 	}
 
 	msg.SetSchemaVersion(extractHeaderString(receivedMsg.Headers, headerKey.SchemaVer))
 	return msg, nil
 }
 
-func (r *rabbitMQ) requeueMessageWithDLQ(consumerMeta map[string]interface{}, msg interfaces.Message,
+func (r *rabbitMQ) requeueMessageWithDLQ(consumerMeta map[string]any, msg interfaces.Message,
 	receivedMsg amqp.Delivery) func(ctx context.Context, delayFn interfaces.DelayFn) (err error) {
 	return func(ctx context.Context, delayFn interfaces.DelayFn) (err error) {
 		if delayFn == nil {
@@ -417,7 +424,7 @@ func (r *rabbitMQ) requeueMessageWithDLQ(consumerMeta map[string]interface{}, ms
 				Body:        receivedMsg.Body,
 				Timestamp:   time.Now(),
 				AppId:       r.tagName,
-				Expiration:  fmt.Sprintf("%d", delayInSeconds*10000),
+				Expiration:  fmt.Sprintf("%d", delayInSeconds*millisecondsMultiplier),
 			},
 		)
 

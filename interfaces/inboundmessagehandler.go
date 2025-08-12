@@ -22,7 +22,7 @@ type InboundMessage struct {
 	RetryCount int64 `json:"retryCount"`
 	// Metadata is the metadata of the message.
 	// This is set by the library to identify the metadata of the message.
-	Metadata map[string]interface{} `json:"metadata"`
+	Metadata map[string]any `json:"metadata"`
 	// Ack is used for confirming the message. It will drop the message from the queue.
 	Ack func(ctx context.Context) (err error) `json:"-"`
 	// Nack is used for rejecting the message. It will requeue the message to be re-delivered again.

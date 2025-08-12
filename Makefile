@@ -53,7 +53,7 @@ docker-clean:
 lint: $(GOLANGCI) ## Runs golangci-lint with predefined configuration
 	@echo "Applying linter"
 	golangci-lint version
-	golangci-lint run -c .golangci.yaml ./...
+	golangci-lint run -c .golangci.yml ./...
 
 .PHONY: lint lint-prepare clean build unittest 
 

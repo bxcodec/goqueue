@@ -440,7 +440,7 @@ make lint
 - 📖 **Documentation**: [pkg.go.dev/github.com/bxcodec/goqueue](https://pkg.go.dev/github.com/bxcodec/goqueue)
 - 🐛 **Issues**: [GitHub Issues](https://github.com/bxcodec/goqueue/issues)
 - 💬 **Discussions**: [GitHub Discussions](https://github.com/bxcodec/goqueue/discussions)
-- 📧 **Email**: [maintainer@example.com](mailto:maintainer@example.com)
+- 📧 **Email**: [iman@tumorang.com](mailto:iman@tumorang.com)
 
 ---
 
@@ -459,8 +459,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 <div align="center">
-
-**⭐ Star this repo if you find it useful!**
 
 [🚀 Get Started](#-quick-start) • [📖 Documentation](https://pkg.go.dev/github.com/bxcodec/goqueue) • [🤝 Contribute](#-contributing)
 

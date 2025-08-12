@@ -356,7 +356,7 @@ We welcome contributions to improve our documentation! Here's how you can help:
 - **📖 Documentation**: You're here! Check the component-specific docs above
 - **💬 Discussions**: [GitHub Discussions](https://github.com/bxcodec/goqueue/discussions)
 - **🐛 Issues**: [GitHub Issues](https://github.com/bxcodec/goqueue/issues)
-- **📧 Email**: [maintainer@example.com](mailto:maintainer@example.com)
+- 📧 **Email**: [iman@tumorang.com](mailto:iman@tumorang.com)
 
 ---
 

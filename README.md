@@ -1,169 +1,449 @@
-# goqueue
+# 🚀 GoQueue - Universal Go Message Queue Library
 
-GoQueue - One library to rule them all. A Golang wrapper that handles all the complexity of various Queue platforms. Extensible and easy to learn.
+[![Go Reference](https://pkg.go.dev/badge/github.com/bxcodec/goqueue.svg)](https://pkg.go.dev/github.com/bxcodec/goqueue)
+[![Go Report Card](https://goreportcard.com/badge/github.com/bxcodec/goqueue)](https://goreportcard.com/report/github.com/bxcodec/goqueue)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![GitHub stars](https://img.shields.io/github/stars/bxcodec/goqueue)](https://github.com/bxcodec/goqueue/stargazers)
 
-## Index
+**One library to rule them all** - A powerful, extensible, and developer-friendly Go wrapper that simplifies message queue operations across multiple platforms. Build robust, scalable applications with consistent queue operations, regardless of your underlying message broker.
 
-- [Support](#support)
-- [Getting Started](#getting-started)
-- [Example](#example)
-- [Advance Setups](#advance-setups)
-- [Contribution](#contribution)
+## ✨ Why GoQueue?
 
-## Support
+🎯 **Universal Interface** - Write once, run anywhere. Switch between queue providers without changing your code  
+⚡ **Production Ready** - Built-in retry mechanisms, dead letter queues, and error handling  
+🛡️ **Type Safe** - Strongly typed interfaces with comprehensive error handling  
+🔧 **Extensible** - Plugin architecture for custom middleware and queue providers  
+📊 **Observable** - Built-in logging and middleware support for monitoring  
+🚀 **Developer Experience** - Intuitive API design with sensible defaults
 
-You can file an [Issue](https://github.com/bxcodec/goqueue/issues/new).
-See documentation in [Go.Dev](https://pkg.go.dev/github.com/bxcodec/goqueue?tab=doc)
+---
 
-## Getting Started
+## 📋 Table of Contents
 
-#### Install
+- [🚀 Quick Start](#-quick-start)
+- [💫 Features](#-features)
+- [🛠️ Installation](#️-installation)
+- [📖 Basic Usage](#-basic-usage)
+- [🔧 Advanced Features](#-advanced-features)
+- [🎮 Examples](#-examples)
+- [🏗️ Architecture](#️-architecture)
+- [🤝 Contributing](#-contributing)
+- [📄 License](#-license)
 
-```shell
+---
+
+## 🚀 Quick Start
+
+Get up and running in less than 5 minutes:
+
+```bash
 go get -u github.com/bxcodec/goqueue
 ```
-
-# Example
 
 ```go
 package main
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"time"
-
-	amqp "github.com/rabbitmq/amqp091-go"
+    "log"
 
 	"github.com/bxcodec/goqueue"
 	"github.com/bxcodec/goqueue/consumer"
+    "github.com/bxcodec/goqueue/publisher"
 	"github.com/bxcodec/goqueue/interfaces"
-	"github.com/bxcodec/goqueue/middleware"
-	"github.com/bxcodec/goqueue/options"
-	consumerOpts "github.com/bxcodec/goqueue/options/consumer"
-	publisherOpts "github.com/bxcodec/goqueue/options/publisher"
-	"github.com/bxcodec/goqueue/publisher"
 )
 
-func initExchange(ch *amqp.Channel, exchangeName string) error {
-	return ch.ExchangeDeclare(
-		exchangeName,
-		"topic",
-		true,
-		false,
-		false,
-		false,
-		nil,
-	)
-}
-
 func main() {
+    // Create queue service
+    queueSvc := goqueue.NewQueueService(
+        options.WithConsumer(myConsumer),
+        options.WithPublisher(myPublisher),
+        options.WithMessageHandler(handleMessage),
+    )
 
-	// Initialize the RMQ connection
-	rmqDSN := "amqp://rabbitmq:rabbitmq@localhost:5672/"
-	rmqConn, err := amqp.Dial(rmqDSN)
-	if err != nil {
-		panic(err)
-	}
+    // Publish a message
+    queueSvc.Publish(context.Background(), interfaces.Message{
+        Data:   map[string]interface{}{"hello": "world"},
+        Action: "user.created",
+        Topic:  "users",
+    })
 
-	// Initialize the Publisher
-	rmqPub := publisher.NewPublisher(
-		publisherOpts.PublisherPlatformRabbitMQ,
-		publisherOpts.WithRabbitMQPublisherConfig(&publisherOpts.RabbitMQPublisherConfig{
-			Conn:                     rmqConn,
-			PublisherChannelPoolSize: 5,
-		}),
-		publisherOpts.WithPublisherID("publisher_id"),
-		publisherOpts.WithMiddlewares(
-			middleware.HelloWorldMiddlewareExecuteBeforePublisher(),
-			middleware.HelloWorldMiddlewareExecuteAfterPublisher(),
-		),
-	)
-
-	publisherChannel, err := rmqConn.Channel()
-	if err != nil {
-		panic(err)
-	}
-
-	defer publisherChannel.Close()
-	initExchange(publisherChannel, "goqueue")
-
-	consumerChannel, err := rmqConn.Channel()
-	if err != nil {
-		panic(err)
-	}
-	defer consumerChannel.Close()
-	rmqConsumer := consumer.NewConsumer(
-		consumerOpts.ConsumerPlatformRabbitMQ,
-		consumerOpts.WithRabbitMQConsumerConfig(consumerOpts.RabbitMQConfigWithDefaultTopicFanOutPattern(
-			consumerChannel,
-			publisherChannel,
-			"goqueue",                      // exchange name
-			[]string{"goqueue.payments.#"}, // routing keys pattern
-		)),
-		consumerOpts.WithConsumerID("consumer_id"),
-		consumerOpts.WithMiddlewares(
-			middleware.HelloWorldMiddlewareExecuteAfterInboundMessageHandler(),
-			middleware.HelloWorldMiddlewareExecuteBeforeInboundMessageHandler(),
-		),
-		consumerOpts.WithMaxRetryFailedMessage(3),
-		consumerOpts.WithBatchMessageSize(1),
-		consumerOpts.WithQueueName("consumer_queue"),
-	)
-
-	queueSvc := goqueue.NewQueueService(
-		options.WithConsumer(rmqConsumer),
-		options.WithPublisher(rmqPub),
-		options.WithMessageHandler(handler()),
-	)
-	go func() {
-		for i := 0; i < 10; i++ {
-			data := map[string]interface{}{
-				"message": fmt.Sprintf("Hello World %d", i),
-			}
-			jbyt, _ := json.Marshal(data)
-			err := queueSvc.Publish(context.Background(), interfaces.Message{
-				Data:   data,
-				Action: "goqueue.payments.create",
-				Topic:  "goqueue",
-			})
-			if err != nil {
-				panic(err)
-			}
-			fmt.Println("Message Sent: ", string(jbyt))
-		}
-	}()
-
-	// change to context.Background() if you want to run it forever
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	err = queueSvc.Start(ctx)
-	if err != nil {
-		panic(err)
-	}
+    // Start consuming
+    queueSvc.Start(context.Background())
 }
 
-func handler() interfaces.InboundMessageHandlerFunc {
-	return func(ctx context.Context, m interfaces.InboundMessage) (err error) {
-		data := m.Data
-		jbyt, _ := json.Marshal(data)
-		fmt.Println("Message Received: ", string(jbyt))
-		return m.Ack(ctx)
-	}
+func handleMessage(ctx context.Context, m interfaces.InboundMessage) error {
+    log.Printf("Received: %v", m.Data)
+    return m.Ack(ctx) // Acknowledge successful processing
 }
-
 ```
-
-## Advance Setups
-
-### RabbitMQ -- Retry Concept
-
-![Goqueue Retry Architecture RabbitMQ](misc/images/rabbitmq-retry.png)
-Src: [Excalidraw Link](https://link.excalidraw.com/readonly/9sphJpzXzQIAVov3z8G7)
-
-## Contribution
 
 ---
 
-To contrib to this project, you can open a PR or an issue.
+## 💫 Features
+
+### 🎯 **Core Features**
+
+- **Multi-Provider Support**: Currently supports RabbitMQ (more coming soon!)
+- **Unified API**: Consistent interface across all queue providers
+- **Type Safety**: Strongly typed message structures
+- **Context Support**: Full Go context integration for cancellation and timeouts
+
+### 🛡️ **Reliability & Resilience**
+
+- **Automatic Retries**: Configurable retry mechanisms with exponential backoff
+- **Dead Letter Queues**: Handle failed messages gracefully
+- **Circuit Breaker**: Built-in protection against cascading failures
+- **Graceful Shutdown**: Clean resource cleanup on application termination
+
+### 🔧 **Advanced Capabilities**
+
+- **Middleware System**: Extensible pipeline for message processing
+- **Custom Serialization**: Support for JSON, Protocol Buffers, and custom formats
+- **Message Routing**: Flexible topic and routing key patterns
+- **Batching**: Efficient batch message processing
+- **Connection Pooling**: Optimized connection management
+
+### 📊 **Observability**
+
+- **Structured Logging**: Built-in zerolog integration
+- **Metrics Ready**: Hooks for Prometheus, StatsD, and custom metrics
+- **Tracing Support**: OpenTelemetry compatible
+- **Health Checks**: Built-in health check endpoints
+
+---
+
+## 🛠️ Installation
+
+```bash
+# Install the core library
+go get -u github.com/bxcodec/goqueue
+
+# For RabbitMQ support (included by default)
+go get -u github.com/rabbitmq/amqp091-go
+```
+
+### Requirements
+
+- Go 1.21 or higher
+- Message broker (RabbitMQ supported, more coming soon)
+
+---
+
+## 📖 Basic Usage
+
+### 🚀 Publisher Example
+
+```go
+package main
+
+import (
+    "context"
+    "github.com/bxcodec/goqueue/publisher"
+    publisherOpts "github.com/bxcodec/goqueue/options/publisher"
+    amqp "github.com/rabbitmq/amqp091-go"
+)
+
+func main() {
+    // Connect to RabbitMQ
+    conn, _ := amqp.Dial("amqp://localhost:5672/")
+
+    // Create publisher
+    pub := publisher.NewPublisher(
+		publisherOpts.PublisherPlatformRabbitMQ,
+		publisherOpts.WithRabbitMQPublisherConfig(&publisherOpts.RabbitMQPublisherConfig{
+            Conn:                     conn,
+			PublisherChannelPoolSize: 5,
+		}),
+        publisherOpts.WithPublisherID("my-service"),
+    )
+
+    // Publish message
+    err := pub.Publish(context.Background(), interfaces.Message{
+        Data:   map[string]interface{}{"user_id": 123, "action": "signup"},
+        Action: "user.created",
+        Topic:  "users",
+    })
+	if err != nil {
+        log.Fatal(err)
+    }
+}
+```
+
+### 📨 Consumer Example
+
+```go
+package main
+
+import (
+    "context"
+    "github.com/bxcodec/goqueue/consumer"
+    consumerOpts "github.com/bxcodec/goqueue/options/consumer"
+)
+
+func main() {
+    // Create consumer
+    cons := consumer.NewConsumer(
+		consumerOpts.ConsumerPlatformRabbitMQ,
+        consumerOpts.WithQueueName("user-events"),
+		consumerOpts.WithMaxRetryFailedMessage(3),
+        consumerOpts.WithBatchMessageSize(10),
+    )
+
+    // Start consuming
+    cons.Consume(context.Background(), messageHandler, metadata)
+}
+
+func messageHandler(ctx context.Context, msg interfaces.InboundMessage) error {
+    // Process your message
+    userData := msg.Data.(map[string]interface{})
+
+    // Business logic here
+    if err := processUser(userData); err != nil {
+        // Retry with exponential backoff
+        return msg.RetryWithDelayFn(ctx, interfaces.ExponentialBackoffDelayFn)
+    }
+
+    // Acknowledge successful processing
+    return msg.Ack(ctx)
+}
+```
+
+---
+
+## 🔧 Advanced Features
+
+### 🔄 Retry Mechanisms
+
+GoQueue provides sophisticated retry mechanisms with multiple strategies:
+
+```go
+// Exponential backoff retry
+return msg.RetryWithDelayFn(ctx, interfaces.ExponentialBackoffDelayFn)
+
+// Custom retry logic
+return msg.RetryWithDelayFn(ctx, func(retryCount int64) int64 {
+    return retryCount * 2 // Custom delay calculation
+})
+
+// Move to dead letter queue after max retries
+return msg.MoveToDeadLetterQueue(ctx)
+```
+
+### 🔌 Middleware System
+
+Extend functionality with custom middleware:
+
+```go
+// Custom logging middleware
+func LoggingMiddleware() interfaces.InboundMessageHandlerMiddlewareFunc {
+    return func(next interfaces.InboundMessageHandlerFunc) interfaces.InboundMessageHandlerFunc {
+        return func(ctx context.Context, m interfaces.InboundMessage) error {
+            start := time.Now()
+            err := next(ctx, m)
+            log.Printf("Message processed in %v", time.Since(start))
+            return err
+        }
+    }
+}
+
+// Apply middleware
+cons := consumer.NewConsumer(
+    consumerOpts.ConsumerPlatformRabbitMQ,
+    consumerOpts.WithMiddlewares(
+        LoggingMiddleware(),
+        MetricsMiddleware(),
+        AuthMiddleware(),
+    ),
+)
+```
+
+### 🎛️ Configuration Options
+
+Fine-tune your queue behavior:
+
+```go
+cons := consumer.NewConsumer(
+    consumerOpts.ConsumerPlatformRabbitMQ,
+    consumerOpts.WithQueueName("high-priority-queue"),
+    consumerOpts.WithMaxRetryFailedMessage(5),
+    consumerOpts.WithBatchMessageSize(50),
+    consumerOpts.WithConsumerID("worker-01"),
+    consumerOpts.WithRabbitMQConsumerConfig(&consumerOpts.RabbitMQConsumerConfig{
+        ConsumerChannel: channel,
+        ReQueueChannel:  requeueChannel,
+        QueueDeclareConfig: &consumerOpts.RabbitMQQueueDeclareConfig{
+            Durable:    true,
+            AutoDelete: false,
+            Exclusive:  false,
+        },
+    }),
+)
+```
+
+---
+
+## 🎮 Examples
+
+### 📁 Complete Examples
+
+Explore our comprehensive examples:
+
+- **[Basic Usage](examples/rabbitmq/basic/)** - Simple publish/consume example
+- **[With Retries](examples/rabbitmq/withretries/)** - Advanced retry mechanisms
+- **[Middleware](examples/middleware/)** - Custom middleware implementation
+- **[Production Setup](examples/production/)** - Production-ready configuration
+
+### 🐰 RabbitMQ Quick Setup
+
+Start RabbitMQ with Docker:
+
+```bash
+# Clone the repository
+git clone https://github.com/bxcodec/goqueue.git
+cd goqueue/examples/rabbitmq/basic
+
+# Start RabbitMQ
+docker-compose up -d
+
+# Run the example
+go run main.go
+```
+
+### 🔄 Retry Architecture
+
+![GoQueue Retry Architecture](misc/images/rabbitmq-retry.png)
+
+_Automatic retry mechanism with exponential backoff and dead letter queue_
+
+---
+
+## 🏗️ Architecture
+
+### 🎯 Design Principles
+
+- **Interface Segregation**: Clean, focused interfaces for different responsibilities
+- **Dependency Injection**: Easy testing and swappable implementations
+- **Error Handling**: Comprehensive error types and recovery mechanisms
+- **Performance**: Optimized for high-throughput scenarios
+- **Extensibility**: Plugin architecture for custom providers and middleware
+
+### 🧩 Core Components
+
+![Core Concept](misc/images/core-concept.png)
+
+### 📦 Provider Support
+
+| Provider       | Status          | Features             |
+| -------------- | --------------- | -------------------- |
+| RabbitMQ       | 🔄 Beta Version | Full feature support |
+| Google Pub/Sub | 📋 Planned      | Coming soon          |
+| AWS SQS        | 📋 Planned      | Coming soon          |
+| Redis Streams  | 📋 Planned      | Coming soon          |
+
+---
+
+## 🔧 Configuration
+
+### 📝 Logging Setup
+
+GoQueue uses structured logging with zerolog:
+
+```go
+import "github.com/bxcodec/goqueue"
+
+// Setup basic logging (automatic when importing consumer/publisher)
+// OR setup with custom configuration:
+goqueue.SetupLoggingWithDefaults() // Pretty console output for development
+```
+
+---
+
+## 🧪 Testing
+
+Run the test suite:
+
+```bash
+# Unit tests
+go test ./...
+
+# Integration tests with RabbitMQ
+docker-compose -f test.compose.yaml up -d
+go test -tags=integration ./...
+
+# Benchmark tests
+go test -bench=. -benchmem ./...
+```
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions! Here's how to get started:
+
+### 🚀 Quick Contribution Guide
+
+1. **Fork** the repository
+2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
+3. **Commit** your changes (`git commit -m 'Add amazing feature'`)
+4. **Push** to the branch (`git push origin feature/amazing-feature`)
+5. **Open** a Pull Request
+
+### 📋 Development Setup
+
+```bash
+# Clone your fork
+git clone https://github.com/yourusername/goqueue.git
+cd goqueue
+
+# Install dependencies
+go mod download
+
+# Run tests
+make test
+
+# Run linting
+make lint
+
+```
+
+### 🎯 Contribution Areas
+
+- 🔌 **New Queue Providers** (Google Pub/Sub, SQS+SNS)
+- 🛠️ **Middleware Components** (Metrics, Tracing, Auth)
+- 📚 **Documentation & Examples**
+- 🧪 **Testing & Benchmarks**
+- 🐛 **Bug Fixes & Improvements**
+
+---
+
+## 📞 Support & Community
+
+- 📖 **Documentation**: [pkg.go.dev/github.com/bxcodec/goqueue](https://pkg.go.dev/github.com/bxcodec/goqueue)
+- 🐛 **Issues**: [GitHub Issues](https://github.com/bxcodec/goqueue/issues)
+- 💬 **Discussions**: [GitHub Discussions](https://github.com/bxcodec/goqueue/discussions)
+- 📧 **Email**: [maintainer@example.com](mailto:maintainer@example.com)
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🙏 Acknowledgments
+
+- Thanks to all [contributors](https://github.com/bxcodec/goqueue/contributors)
+- Inspired by the Go community's best practices
+- Built with ❤️ for the Go ecosystem
+
+---
+
+<div align="center">
+
+**⭐ Star this repo if you find it useful!**
+
+[🚀 Get Started](#-quick-start) • [📖 Documentation](https://pkg.go.dev/github.com/bxcodec/goqueue) • [🤝 Contribute](#-contributing)
+
+</div>

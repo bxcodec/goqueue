@@ -290,8 +290,6 @@ Explore our comprehensive examples:
 
 - **[Basic Usage](examples/rabbitmq/basic/)** - Simple publish/consume example
 - **[With Retries](examples/rabbitmq/withretries/)** - Advanced retry mechanisms
-- **[Middleware](examples/middleware/)** - Custom middleware implementation
-- **[Production Setup](examples/production/)** - Production-ready configuration
 
 ### 🐰 RabbitMQ Quick Setup
 

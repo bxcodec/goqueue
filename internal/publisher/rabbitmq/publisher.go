@@ -14,7 +14,7 @@ import (
 	publisherOpts "github.com/bxcodec/goqueue/options/publisher"
 	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
-	"github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -64,7 +64,7 @@ func NewPublisher(
 	channelPool := NewChannelPool(conn, opt.RabbitMQPublisherConfig.PublisherChannelPoolSize)
 	ch, err := channelPool.Get()
 	if err != nil {
-		logrus.Fatal(err)
+		log.Fatal().Err(err).Msg("error getting channel from pool")
 	}
 	defer channelPool.Return(ch)
 

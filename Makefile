@@ -35,7 +35,7 @@ run-tests: $(GOTESTSUM)
 test: run-tests $(TPARSE) ## Run Tests & parse details
 	@cat gotestsum.json.out | $(TPARSE) -all -notests
 docker-test:
-	@docker-compose -f test.compose.yaml up -d --build 
+	@docker compose -f test.compose.yaml up -d --build 
 
 integration-test: docker-test
 	@echo "Running Integration Tests"
@@ -48,7 +48,7 @@ integration-test-ci: $(GOTESTSUM) $(TPARSE)
 	@cat gotestsum.json.out | $(TPARSE) -all -notests
 
 docker-clean:
-	@docker-compose -f test.compose.yaml down
+	@docker compose -f test.compose.yaml down
 
 lint: $(GOLANGCI) ## Runs golangci-lint with predefined configuration
 	@echo "Applying linter"

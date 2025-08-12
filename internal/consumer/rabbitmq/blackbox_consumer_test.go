@@ -17,7 +17,7 @@ import (
 	consumerOpts "github.com/bxcodec/goqueue/options/consumer"
 	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
-	"github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -53,8 +53,7 @@ func TestSuiteRabbitMQConsumer(t *testing.T) {
 	rabbitMQTestSuite := &rabbitMQTestSuite{
 		rmqURL: rmqURL,
 	}
-	logrus.SetLevel(logrus.DebugLevel)
-	logrus.SetFormatter(&logrus.JSONFormatter{})
+	log.Logger = log.With().Caller().Logger()
 	rabbitMQTestSuite.initConnection(t)
 	suite.Run(t, rabbitMQTestSuite)
 }
@@ -111,8 +110,11 @@ func (s *rabbitMQTestSuite) initQueueForTesting(t *testing.T, exchangePattern ..
 	require.NoError(t, err)
 
 	for _, patternRoutingKey := range exchangePattern {
-		logrus.Printf("binding queue %s to exchange %s with routing key %s",
-			q.Name, testExchange, patternRoutingKey)
+		log.Info().
+			Str("queue_name", q.Name).
+			Str("exchange", testExchange).
+			Str("routing_key", patternRoutingKey).
+			Msg("binding queue to exchange")
 
 		err = s.consumerChannel.QueueBind(
 			rabbitMQTestQueueName, // queue name

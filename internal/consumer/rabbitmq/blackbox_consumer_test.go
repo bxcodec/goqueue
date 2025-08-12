@@ -7,6 +7,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/rs/zerolog/log"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
+
 	"github.com/bxcodec/goqueue"
 	headerKey "github.com/bxcodec/goqueue/headers/key"
 	headerVal "github.com/bxcodec/goqueue/headers/value"
@@ -15,12 +22,6 @@ import (
 	"github.com/bxcodec/goqueue/middleware"
 	"github.com/bxcodec/goqueue/options"
 	consumerOpts "github.com/bxcodec/goqueue/options/consumer"
-	"github.com/google/uuid"
-	amqp "github.com/rabbitmq/amqp091-go"
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
 )
 
 const (
@@ -53,13 +54,12 @@ func TestSuiteRabbitMQConsumer(t *testing.T) {
 	rabbitMQTestSuite := &rabbitMQTestSuite{
 		rmqURL: rmqURL,
 	}
-	logrus.SetLevel(logrus.DebugLevel)
-	logrus.SetFormatter(&logrus.JSONFormatter{})
+	log.Logger = log.With().Caller().Logger()
 	rabbitMQTestSuite.initConnection(t)
 	suite.Run(t, rabbitMQTestSuite)
 }
 
-func (s *rabbitMQTestSuite) BeforeTest(_, _ string) {
+func (*rabbitMQTestSuite) BeforeTest(_, _ string) {
 }
 
 func (s *rabbitMQTestSuite) AfterTest(_, _ string) {
@@ -111,8 +111,11 @@ func (s *rabbitMQTestSuite) initQueueForTesting(t *testing.T, exchangePattern ..
 	require.NoError(t, err)
 
 	for _, patternRoutingKey := range exchangePattern {
-		logrus.Printf("binding queue %s to exchange %s with routing key %s",
-			q.Name, testExchange, patternRoutingKey)
+		log.Info().
+			Str("queue_name", q.Name).
+			Str("exchange", testExchange).
+			Str("routing_key", patternRoutingKey).
+			Msg("binding queue to exchange")
 
 		err = s.consumerChannel.QueueBind(
 			rabbitMQTestQueueName, // queue name
@@ -125,11 +128,11 @@ func (s *rabbitMQTestSuite) initQueueForTesting(t *testing.T, exchangePattern ..
 	}
 }
 
-func (s *rabbitMQTestSuite) getMockData(action string) (res interfaces.Message) {
-	res = interfaces.Message{
+func (*rabbitMQTestSuite) getMockData(action string) (res *interfaces.Message) {
+	res = &interfaces.Message{
 		Action: action,
 		Topic:  testExchange,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"message": "hello-world-test",
 		},
 		Timestamp: time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC),
@@ -138,7 +141,7 @@ func (s *rabbitMQTestSuite) getMockData(action string) (res interfaces.Message) 
 	return res
 }
 
-func (s *rabbitMQTestSuite) seedPublish(contentType string, action string) {
+func (s *rabbitMQTestSuite) seedPublish(contentType, action string) {
 	mockData := s.getMockData(action)
 	jsonData, err := json.Marshal(mockData)
 	s.Require().NoError(err)
@@ -216,16 +219,16 @@ func (s *rabbitMQTestSuite) TestConsumerWithExchangePatternProvided() {
 	s.Require().NoError(err)
 }
 
-func handler(t *testing.T, expected interfaces.Message) interfaces.InboundMessageHandlerFunc {
+func handler(t *testing.T, expected *interfaces.Message) interfaces.InboundMessageHandlerFunc {
 	return func(ctx context.Context, m interfaces.InboundMessage) (err error) {
 		switch m.ContentType {
 		case headerVal.ContentTypeText:
 			assert.Equal(t, expected.Data, m.Data)
 		case headerVal.ContentTypeJSON:
-			expectedJSON, err := json.Marshal(expected.Data)
-			require.NoError(t, err)
-			actualJSON, err := json.Marshal(m.Data)
-			require.NoError(t, err)
+			expectedJSON, marshalErr := json.Marshal(expected.Data)
+			require.NoError(t, marshalErr)
+			actualJSON, marshalErr := json.Marshal(m.Data)
+			require.NoError(t, marshalErr)
 			assert.JSONEq(t, string(expectedJSON), string(actualJSON))
 		}
 
@@ -269,7 +272,7 @@ func (s *rabbitMQTestSuite) TestRequeueWithouthExchangePatternProvided() {
 func handlerRequeue(t *testing.T) interfaces.InboundMessageHandlerFunc {
 	return func(ctx context.Context, m interfaces.InboundMessage) (err error) {
 		delayFn := func(retries int64) int64 {
-			assert.Equal(t, int64(m.RetryCount)+1, retries) // because the retry++ is done before this delayfn is called
+			assert.Equal(t, m.RetryCount+1, retries) // because the retry++ is done before this delayfn is called
 			return m.RetryCount
 		}
 

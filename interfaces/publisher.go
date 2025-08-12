@@ -20,4 +20,6 @@ func (f PublisherFunc) Publish(ctx context.Context, m Message) (err error) {
 	return f(ctx, m)
 }
 
+// PublisherMiddlewareFunc is a function type that represents a publisher middleware function.
+// It takes a next PublisherFunc as input parameter and returns a PublisherFunc.
 type PublisherMiddlewareFunc func(next PublisherFunc) PublisherFunc

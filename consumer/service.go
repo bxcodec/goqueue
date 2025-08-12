@@ -3,6 +3,7 @@ package consumer
 import (
 	"github.com/bxcodec/goqueue/internal/consumer"
 	"github.com/bxcodec/goqueue/internal/consumer/rabbitmq"
+	_ "github.com/bxcodec/goqueue/internal/shared" // Auto-setup logging
 	"github.com/bxcodec/goqueue/options"
 	consumerOpts "github.com/bxcodec/goqueue/options/consumer"
 )

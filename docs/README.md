@@ -107,7 +107,7 @@ If you're new to GoQueue, start with these steps:
 2. **🎯 Choose Your Platform**
 
    - Currently supported: RabbitMQ
-   - Coming soon: Google Pub/Sub, AWS SQS, Apache Kafka
+   - Coming soon: Google Pub/Sub, AWS SQS + SNS
 
 3. **📖 Read the Basics**
 

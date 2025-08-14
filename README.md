@@ -9,6 +9,8 @@
 
 ## ✨ Why GoQueue?
 
+![Core Concept](misc/images/core-concept.png)
+
 🎯 **Universal Interface** - Write once, run anywhere. Switch between queue providers without changing your code  
 ⚡ **Production Ready** - Built-in retry mechanisms, dead letter queues, and error handling  
 🛡️ **Type Safe** - Strongly typed interfaces with comprehensive error handling  
@@ -290,8 +292,6 @@ Explore our comprehensive examples:
 
 - **[Basic Usage](examples/rabbitmq/basic/)** - Simple publish/consume example
 - **[With Retries](examples/rabbitmq/withretries/)** - Advanced retry mechanisms
-- **[Middleware](examples/middleware/)** - Custom middleware implementation
-- **[Production Setup](examples/production/)** - Production-ready configuration
 
 ### 🐰 RabbitMQ Quick Setup
 
@@ -337,8 +337,7 @@ _Automatic retry mechanism with exponential backoff and dead letter queue_
 | -------------- | --------------- | -------------------- |
 | RabbitMQ       | 🔄 Beta Version | Full feature support |
 | Google Pub/Sub | 📋 Planned      | Coming soon          |
-| AWS SQS        | 📋 Planned      | Coming soon          |
-| Redis Streams  | 📋 Planned      | Coming soon          |
+| AWS SQS + SNS  | 📋 Planned      | Coming soon          |
 
 ---
 
@@ -439,7 +438,6 @@ make lint
 
 - 📖 **Documentation**: [pkg.go.dev/github.com/bxcodec/goqueue](https://pkg.go.dev/github.com/bxcodec/goqueue)
 - 🐛 **Issues**: [GitHub Issues](https://github.com/bxcodec/goqueue/issues)
-- 💬 **Discussions**: [GitHub Discussions](https://github.com/bxcodec/goqueue/discussions)
 - 📧 **Email**: [iman@tumorang.com](mailto:iman@tumorang.com)
 
 ---
